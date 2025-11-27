@@ -1,0 +1,27 @@
+# PLC Mock Server 配置文件
+
+# Redis配置
+redis:
+  host: localhost
+  port: 6379
+  password: null  # 如果有密码，填写密码字符串
+  db: 0
+
+# OPCUA Server配置
+opcua:
+  server_url: "opc.tcp://0.0.0.0:18951"
+
+# Web监控界面配置
+monitor:
+  host: "0.0.0.0"
+  port: 5000
+
+# 数据存储配置
+storage:
+  db_path: "plc_data.db"
+
+# 日志配置
+logging:
+  log_dir: "logs"
+  log_name: "mock_server"
+

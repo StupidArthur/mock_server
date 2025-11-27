@@ -1,0 +1,118 @@
+# PLC Mock Server 组态配置文件
+# 此文件由PLC运行时自动生成和更新，也可手动编辑
+
+# 运行周期（秒），500ms
+cycle_time: 0.5
+
+# 注意：不再支持start_datetime和initial_acceleration_duration配置项
+# 时间戳使用系统时间，如需时间加速功能，请使用独立的调试模块（debug/debug_runner.py）
+
+# 物理模型实例配置
+models:
+  # 第一组水箱
+  tank1:
+    type: cylindrical_tank
+    params:
+      # 只保留与默认值不同的参数
+      initial_level: 0.0     # 初始水位（米），默认值为0.0
+
+  # 第一组阀门
+  valve1:
+    type: valve
+    # 所有参数都是默认值，无需配置params
+
+  # 第二组水箱
+  tank2:
+    type: cylindrical_tank
+    params:
+      initial_level: 0.0
+
+  # 第二组阀门
+  valve2:
+    type: valve
+
+  # 第三组水箱
+  tank3:
+    type: cylindrical_tank
+    params:
+      initial_level: 0.0
+
+  # 第三组阀门
+  valve3:
+    type: valve
+
+# 控制算法实例配置
+algorithms:
+  # 第一组PID控制器
+  pid1:
+    type: PID
+    params:
+      name: PID1            # 算法名称，默认值为"PID"，这里设置为"PID1"
+      sv: 1.0               # 设定值，默认值为0.0，这里设置为1.0
+
+  # 第二组PID控制器
+  pid2:
+    type: PID
+    params:
+      name: PID2
+      sv: 1.0
+
+  # 第三组PID控制器
+  pid3:
+    type: PID
+    params:
+      name: PID3
+      sv: 1.0
+
+# 连接关系配置
+connections:
+  # 第一组：pid1 -> valve1 -> tank1 -> pid1（闭环控制）
+  # PID输出 -> 阀门目标开度
+  - from: pid1.mv
+    to: valve1.target_opening
+  # 阀门当前开度 -> 水箱阀门开度
+  - from: valve1.current_opening
+    to: tank1.valve_opening
+  # 水箱液位 -> PID过程变量
+  - from: tank1.level
+    to: pid1.pv
+  
+  # 第二组：pid2 -> valve2 -> tank2 -> pid2（闭环控制）
+  # PID输出 -> 阀门目标开度
+  - from: pid2.mv
+    to: valve2.target_opening
+  # 阀门当前开度 -> 水箱阀门开度
+  - from: valve2.current_opening
+    to: tank2.valve_opening
+  # 水箱液位 -> PID过程变量
+  - from: tank2.level
+    to: pid2.pv
+  
+  # 第三组：pid3 -> valve3 -> tank3 -> pid3（闭环控制）
+  # PID输出 -> 阀门目标开度
+  - from: pid3.mv
+    to: valve3.target_opening
+  # 阀门当前开度 -> 水箱阀门开度
+  - from: valve3.current_opening
+    to: tank3.valve_opening
+  # 水箱液位 -> PID过程变量
+  - from: tank3.level
+    to: pid3.pv
+
+# 执行顺序配置
+# 由于存在闭环控制（pid -> valve -> tank -> pid），需要手动指定执行顺序
+# 每组闭环控制的执行顺序：PID -> Valve -> Tank
+# 三组独立的闭环控制可以按组顺序执行
+execution_order:
+  # 第一组闭环控制
+  - pid1
+  - valve1
+  - tank1
+  # 第二组闭环控制
+  - pid2
+  - valve2
+  - tank2
+  # 第三组闭环控制
+  - pid3
+  - valve3
+  - tank3

@@ -1,0 +1,76 @@
+# 示例配置文件
+# PID控制水箱液位的完整示例
+
+cycle_time: 0.1
+
+# 数据生成模式配置
+start_datetime: "2025-03-12 20:28:00"  # 起始时间
+end_datetime: "2025-03-12 21:28:00"    # 结束时间（3天后）
+sample_interval: 5.0                    # 数据采样时间间隔（秒）- 5秒采样
+
+models:
+  tank1:
+    type: cylindrical_tank
+    params:
+      height: 0.5
+      radius: 1.0
+      inlet_area: 0.02
+      inlet_velocity: 2
+      outlet_area: 0.002
+      initial_level: 0
+      step: 0.1
+  
+  valve1:
+    type: valve
+    params:
+      min_opening: 0.0
+      max_opening: 100.0
+      step: 0.1
+      full_travel_time: 10.0
+
+algorithms:
+  pid1:
+    type: PID
+    params:
+      name: PID1
+      kp: 120
+      Ti: 2
+      Td: 0
+      pv: 0.0
+      sv: 0.25
+      mv: 0.0
+      h: 100.0
+      l: 0.0
+      T: 0.1
+
+connections:
+  # PID输出连接到阀门目标开度
+  - from: pid1
+    from_param: mv
+    to: valve1
+    to_param: target_opening
+  
+  # 阀门开度连接到水箱输入
+  - from: valve1
+    from_param: current_opening
+    to: tank1
+    to_param: valve_opening
+  
+  # 水箱液位连接到PID过程变量
+  - from: tank1
+    from_param: level
+    to: pid1
+    to_param: pv
+
+# 数据导出配置
+export:
+  output_file: "simulation_output.csv"  # 输出文件名
+  tags:                                  # 位号名和描述（键值对，key是位号名，value是描述）
+    datetime: "时间戳"
+    pid1.pv: "PID过程变量"
+    pid1.mv: "PID输出值"
+    pid1.sv: "PID设定值"
+    pid1.kp: "比例系数"
+    pid1.Ti: "积分时间"
+    pid1.Td: "微分时间"
+

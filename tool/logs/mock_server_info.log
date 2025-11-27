@@ -1,0 +1,24 @@
+2025-11-27 14:50:13,473 - INFO - CylindricalTank initialized: height=2.0, radius=0.5, initial_level=0.0
+2025-11-27 14:50:13,473 - INFO - Valve initialized: range=[0.0, 100.0], full_travel_time=5.0s
+2025-11-27 14:50:13,473 - INFO - PID 'PID' initialized: kp=12.0, ti=30.0s, td=0.15s, output_range=[0.0, 100.0], sample_time=0.5s
+2025-11-27 14:50:13,604 - INFO - Clock initialized with cycle_time=0.5s
+2025-11-27 14:50:13,604 - INFO - Clock started
+2025-11-27 14:50:13,835 - INFO - Clock stopped at time=900.00s
+2025-11-27 14:50:42,471 - INFO - CylindricalTank initialized: height=2.0, radius=0.5, initial_level=0.0
+2025-11-27 14:50:42,471 - INFO - Valve initialized: range=[0.0, 100.0], full_travel_time=5.0s
+2025-11-27 14:50:42,473 - INFO - PID 'PID' initialized: kp=12.0, ti=30.0s, td=0.15s, output_range=[0.0, 100.0], sample_time=0.5s
+2025-11-27 14:50:42,473 - INFO - Clock initialized with cycle_time=0.5s
+2025-11-27 14:50:42,473 - INFO - Clock started
+2025-11-27 14:50:42,747 - INFO - Clock stopped at time=900.00s
+2025-11-27 14:52:05,923 - INFO - CylindricalTank initialized: height=2.0, radius=0.5, initial_level=0.0
+2025-11-27 14:52:05,923 - INFO - Valve initialized: range=[0.0, 100.0], full_travel_time=5.0s
+2025-11-27 14:52:05,923 - INFO - PID 'PID' initialized: kp=12.0, ti=30.0s, td=0.15s, output_range=[0.0, 100.0], sample_time=0.5s
+2025-11-27 14:52:05,923 - INFO - Clock initialized with cycle_time=0.5s
+2025-11-27 14:52:05,923 - INFO - Clock started
+2025-11-27 14:52:06,180 - INFO - Clock stopped at time=900.00s
+2025-11-27 14:59:08,406 - INFO - CylindricalTank initialized: height=2.0, radius=0.5, initial_level=0.0
+2025-11-27 14:59:08,406 - INFO - Valve initialized: range=[0.0, 100.0], full_travel_time=5.0s
+2025-11-27 14:59:08,406 - INFO - PID 'PID' initialized: kp=12.0, ti=30.0s, td=0.15s, output_range=[0.0, 100.0], sample_time=0.5s
+2025-11-27 14:59:08,407 - INFO - Clock initialized with cycle_time=0.5s
+2025-11-27 14:59:08,407 - INFO - Clock started
+2025-11-27 14:59:08,653 - INFO - Clock stopped at time=900.00s

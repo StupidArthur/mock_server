@@ -1,0 +1,1924 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PLC Mock Server 监控界面</title>
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.0/dist/chart.umd.min.js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Microsoft YaHei', Arial, sans-serif;
+            background-color: #f5f5f5;
+            height: 100vh;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        /* 导航栏 */
+        .navbar {
+            background: #2196F3;
+            color: white;
+            padding: 0;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            z-index: 1000;
+            flex-shrink: 0;
+        }
+        
+        .navbar-content {
+            display: flex;
+            align-items: center;
+            padding: 0 20px;
+            height: 60px;
+        }
+        
+        .navbar-title {
+            font-size: 20px;
+            font-weight: bold;
+            margin-right: 40px;
+        }
+        
+        .navbar-nav {
+            display: flex;
+            gap: 0;
+        }
+        
+        .nav-button {
+            background: transparent;
+            color: white;
+            border: none;
+            padding: 15px 25px;
+            cursor: pointer;
+            font-size: 16px;
+            transition: background 0.3s;
+            border-bottom: 3px solid transparent;
+            text-decoration: none;
+            display: inline-block;
+        }
+        
+        .nav-button:hover {
+            background: rgba(255, 255, 255, 0.1);
+        }
+        
+        .nav-button.active {
+            background: rgba(255, 255, 255, 0.2);
+            border-bottom-color: white;
+        }
+        
+        /* 主内容区域 */
+        .main-content {
+            flex: 1;
+            overflow: hidden;
+            display: flex;
+        }
+        
+        .page {
+            display: none;
+            width: 100%;
+            height: 100%;
+        }
+        
+        .page.active {
+            display: flex;
+        }
+        
+        .container {
+            display: flex;
+            height: 100%;
+            width: 100%;
+        }
+        
+        /* 左侧面板 */
+        .left-panel {
+            width: 40%;
+            background: white;
+            border-right: 2px solid #ddd;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+        
+        /* 右侧面板 */
+        .right-panel {
+            width: 60%;
+            background: white;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            height: 100%;
+        }
+        
+        .panel-header {
+            padding: 15px 20px;
+            background: #4CAF50;
+            color: white;
+            font-size: 18px;
+            font-weight: bold;
+            border-bottom: 2px solid #45a049;
+        }
+        
+        .panel-content {
+            flex: 1;
+            overflow-y: auto;
+            padding: 20px;
+        }
+        
+        /* 实例大卡片容器 */
+        .instance-cards-container {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            width: 100%;
+        }
+        
+        /* 实例大卡片（实时数据页面） */
+        #realtime-page .instance-card {
+            background: #ffffff;
+            border: 2px solid #4CAF50;
+            border-radius: 8px;
+            padding: 15px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            width: 100% !important;
+            max-width: 100% !important;
+            flex: none !important;
+            min-width: auto !important;
+            box-sizing: border-box;
+            margin: 0;
+        }
+        
+        .instance-header {
+            font-size: 18px;
+            font-weight: bold;
+            color: #4CAF50;
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 2px solid #e0e0e0;
+        }
+        
+        /* 参数小卡片网格 */
+        .param-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 10px;
+            width: 100%;
+            box-sizing: border-box;
+        }
+        
+        .param-card {
+            background: #f9f9f9;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 10px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        
+        .param-card:hover {
+            border-color: #2196F3;
+            background: #e3f2fd;
+            transform: translateY(-1px);
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .param-name {
+            font-size: 12px;
+            color: #666;
+            margin-bottom: 5px;
+        }
+        
+        .param-value {
+            font-size: 20px;
+            font-weight: bold;
+            color: #2196F3;
+        }
+        
+        .history-chart-container {
+            position: relative;
+            flex: 1;
+            min-height: 0;
+            overflow: hidden;
+            background: #fafafa;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 10px;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        #history-chart {
+            flex: 1;
+            min-height: 0;
+        }
+        
+        .history-controls {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+            flex-wrap: wrap;
+            align-items: center;
+            flex-shrink: 0;
+        }
+        
+        .history-controls label {
+            font-weight: bold;
+            color: #555;
+        }
+        
+        .history-controls input, .history-controls button {
+            padding: 8px 12px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        
+        .history-controls button {
+            background: #4CAF50;
+            color: white;
+            border: none;
+            cursor: pointer;
+        }
+        
+        .history-controls button:hover {
+            background: #45a049;
+        }
+        
+        /* 位号面板 */
+        .tag-panel {
+            padding: 15px 20px;
+            background: #f9f9f9;
+            border-top: 2px solid #ddd;
+            flex-shrink: 0;
+        }
+        
+        .tag-panel h3 {
+            margin-bottom: 15px;
+            color: #555;
+        }
+        
+        .tag-form {
+            display: flex;
+            gap: 10px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+        
+        .tag-form input {
+            padding: 8px 12px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        
+        .tag-form button {
+            background: #FF9800;
+            color: white;
+            border: none;
+            padding: 8px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        
+        .tag-form button:hover {
+            background: #F57C00;
+        }
+        
+        .status {
+            padding: 10px;
+            border-radius: 4px;
+            margin-bottom: 15px;
+            text-align: center;
+        }
+        
+        .status.connected {
+            background: #d4edda;
+            color: #155724;
+        }
+        
+        .status.disconnected {
+            background: #f8d7da;
+            color: #721c24;
+        }
+        
+        /* 组态页面样式 */
+        .configuration-container {
+            display: flex;
+            height: 100%;
+            width: 100%;
+        }
+        
+        .configuration-left {
+            width: 300px;
+            background: white;
+            border-right: 2px solid #ddd;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            flex-shrink: 0;
+        }
+        
+        .configuration-right {
+            flex: 1;
+            background: #f9f9f9;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        /* 树形结构样式 */
+        .configuration-tree {
+            padding: 10px;
+        }
+        
+        .tree-node {
+            margin: 2px 0;
+            user-select: none;
+        }
+        
+        .tree-node-content {
+            padding: 6px 10px;
+            cursor: pointer;
+            border-radius: 4px;
+            display: flex;
+            align-items: center;
+            transition: background 0.2s;
+        }
+        
+        .tree-node-content:hover {
+            background: #e3f2fd;
+        }
+        
+        .tree-node-content.selected {
+            background: #2196F3;
+            color: white;
+        }
+        
+        .tree-node-icon {
+            width: 16px;
+            height: 16px;
+            margin-right: 6px;
+            display: inline-block;
+            text-align: center;
+            font-size: 12px;
+            line-height: 16px;
+        }
+        
+        .tree-node-icon.expandable {
+            cursor: pointer;
+        }
+        
+        .tree-node-icon.expanded::before {
+            content: '▼';
+        }
+        
+        .tree-node-icon.collapsed::before {
+            content: '▶';
+        }
+        
+        .tree-node-icon.leaf::before {
+            content: '•';
+        }
+        
+        .tree-node-label {
+            flex: 1;
+            font-size: 14px;
+        }
+        
+        .tree-node-children {
+            margin-left: 22px;
+            display: none;
+        }
+        
+        .tree-node-children.expanded {
+            display: block;
+        }
+        
+        .empty-state {
+            padding: 40px;
+            text-align: center;
+            color: #999;
+            font-size: 16px;
+        }
+        
+        /* 回路卡片 */
+        .circuit-card {
+            margin: 15px;
+            border: 2px solid #2196F3;
+            border-radius: 8px;
+            background: white;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        
+        .circuit-header {
+            background: #2196F3;
+            color: white;
+            padding: 12px 20px;
+            font-size: 18px;
+            font-weight: bold;
+            border-radius: 6px 6px 0 0;
+        }
+        
+        .circuit-content {
+            padding: 15px;
+            display: flex;
+            flex-wrap: wrap;
+            gap: 15px;
+        }
+        
+        /* 实例卡片 */
+        .instance-card {
+            flex: 0 0 calc(33.333% - 10px);
+            min-width: 300px;
+            max-width: calc(33.333% - 10px);
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            background: #f9f9f9;
+            display: flex;
+            flex-direction: column;
+        }
+        
+        @media (max-width: 1200px) {
+            .instance-card {
+                flex: 0 0 calc(50% - 10px);
+                max-width: calc(50% - 10px);
+            }
+        }
+        
+        @media (max-width: 800px) {
+            .instance-card {
+                flex: 0 0 100%;
+                max-width: 100%;
+            }
+        }
+        
+        .instance-header {
+            background: #4CAF50;
+            color: white;
+            padding: 10px 15px;
+            font-size: 16px;
+            font-weight: bold;
+            border-radius: 5px 5px 0 0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        
+        .instance-type {
+            font-size: 14px;
+            opacity: 0.9;
+        }
+        
+        .instance-content {
+            padding: 15px;
+        }
+        
+        /* 参数表格 */
+        .params-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 15px;
+            font-size: 14px;
+        }
+        
+        .params-table th {
+            background: #e0e0e0;
+            padding: 10px;
+            text-align: left;
+            border: 1px solid #ddd;
+            font-weight: bold;
+        }
+        
+        .params-table td {
+            padding: 8px 10px;
+            border: 1px solid #ddd;
+        }
+        
+        .params-table tr:nth-child(even) {
+            background: #f5f5f5;
+        }
+        
+        /* 连接关系表格 */
+        .connections-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 14px;
+        }
+        
+        .connections-table th {
+            background: #e0e0e0;
+            padding: 10px;
+            text-align: left;
+            border: 1px solid #ddd;
+            font-weight: bold;
+        }
+        
+        .connections-table td {
+            padding: 8px 10px;
+            border: 1px solid #ddd;
+        }
+        
+        .connections-table tr:nth-child(even) {
+            background: #f5f5f5;
+        }
+        
+        .connections-section {
+            margin-top: 15px;
+        }
+        
+        .connections-section h4 {
+            margin-bottom: 10px;
+            color: #555;
+            font-size: 14px;
+        }
+        
+        /* 数据调试页面样式 */
+        .simulation-page {
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+            width: 100%;
+            margin: 0;
+            padding: 0;
+        }
+        
+        .simulation-content {
+            display: flex;
+            flex: 1;
+            overflow: hidden;
+            min-height: 0;
+            width: 100%;
+            margin: 0;
+            padding: 0;
+        }
+        
+        .simulation-left {
+            width: 35%;
+            background: white;
+            border-right: 2px solid #ddd;
+            overflow-y: auto;
+            padding: 20px;
+            flex-shrink: 0;
+        }
+        
+        .simulation-right {
+            flex: 1;
+            background: white;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            min-width: 0;
+            height: 100%;
+            margin: 0;
+            padding: 0;
+        }
+        
+        .param-group {
+            background: #f9f9f9;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            padding: 15px;
+            margin-bottom: 15px;
+        }
+        
+        .param-group h3 {
+            margin-bottom: 10px;
+            color: #333;
+            font-size: 16px;
+        }
+        
+        .param-row {
+            display: flex;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+        
+        .param-row label {
+            width: 150px;
+            font-size: 14px;
+            color: #555;
+        }
+        
+        .param-row input {
+            flex: 1;
+            padding: 6px 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            font-size: 14px;
+        }
+        
+        .simulation-controls {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+            flex-wrap: wrap;
+        }
+        
+        .simulation-controls button {
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: bold;
+        }
+        
+        .btn-start {
+            background: #4CAF50;
+            color: white;
+        }
+        
+        .btn-start:hover {
+            background: #45a049;
+        }
+        
+        .btn-start:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        
+        .progress-bar-container {
+            margin-top: 15px;
+            display: none;
+        }
+        
+        .progress-bar-container.active {
+            display: block;
+        }
+        
+        .progress-bar {
+            width: 100%;
+            height: 25px;
+            background: #e0e0e0;
+            border-radius: 4px;
+            overflow: hidden;
+        }
+        
+        .progress-bar-fill {
+            height: 100%;
+            background: #4CAF50;
+            transition: width 0.3s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 12px;
+        }
+        
+        .chart-container {
+            flex: 1;
+            padding: 0;
+            margin: 0;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            min-height: 0;
+            width: 100%;
+            height: 100%;
+        }
+        
+        .chart-title {
+            font-size: 18px;
+            font-weight: bold;
+            padding: 10px;
+            margin: 0;
+            text-align: center;
+            flex-shrink: 0;
+            background: #f9f9f9;
+            border-bottom: 1px solid #ddd;
+        }
+        
+        #simulation-chart {
+            flex: 1;
+            min-height: 0;
+            width: 100%;
+            height: 100%;
+            padding: 10px;
+            box-sizing: border-box;
+        }
+        
+        /* 首页样式 */
+        .home-page {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            padding: 40px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+        
+        .home-title {
+            font-size: 36px;
+            font-weight: bold;
+            color: white;
+            margin-bottom: 20px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+        
+        .home-subtitle {
+            font-size: 18px;
+            color: rgba(255, 255, 255, 0.9);
+            margin-bottom: 50px;
+        }
+        
+        .home-cards {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 30px;
+            max-width: 1200px;
+            width: 100%;
+        }
+        
+        .home-card {
+            background: white;
+            border-radius: 12px;
+            padding: 40px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+            text-decoration: none;
+            color: inherit;
+            display: block;
+        }
+        
+        .home-card:hover {
+            transform: translateY(-5px);
+            box-shadow: 0 8px 12px rgba(0,0,0,0.2);
+        }
+        
+        .home-card-icon {
+            font-size: 48px;
+            margin-bottom: 20px;
+        }
+        
+        .home-card-title {
+            font-size: 24px;
+            font-weight: bold;
+            color: #333;
+            margin-bottom: 10px;
+        }
+        
+        .home-card-desc {
+            font-size: 14px;
+            color: #666;
+            line-height: 1.6;
+        }
+    </style>
+</head>
+<body>
+    <!-- 导航栏 -->
+    <nav class="navbar">
+        <div class="navbar-content">
+            <a href="/" style="text-decoration: none; color: inherit;">
+                <div class="navbar-title">PLC Mock Server</div>
+            </a>
+            <div class="navbar-nav">
+                <a href="/realtime-data" class="nav-button" id="nav-realtime">实时数据</a>
+                <a href="/simulation" class="nav-button" id="nav-simulation">数据调试</a>
+                <a href="/config_display" class="nav-button" id="nav-config">组态</a>
+            </div>
+        </div>
+    </nav>
+    
+    <!-- 主内容区域 -->
+    <div class="main-content">
+        <!-- 首页 -->
+        <div id="home-page" class="page active">
+            <div class="home-page">
+                <div class="home-title">PLC Mock Server</div>
+                <div class="home-subtitle">欢迎使用PLC模拟服务器监控系统</div>
+                <div class="home-cards">
+                    <a href="/realtime-data" class="home-card">
+                        <div class="home-card-icon">📊</div>
+                        <div class="home-card-title">实时数据</div>
+                        <div class="home-card-desc">监控PLC实时数据，查看参数值和历史趋势图</div>
+                    </a>
+                    <a href="/simulation" class="home-card">
+                        <div class="home-card-icon">🔧</div>
+                        <div class="home-card-title">数据调试</div>
+                        <div class="home-card-desc">配置模拟参数，进行PID控制曲线模拟</div>
+                    </a>
+                    <a href="/config_display" class="home-card">
+                        <div class="home-card-icon">⚙️</div>
+                        <div class="home-card-title">组态</div>
+                        <div class="home-card-desc">查看组态配置，管理回路和实例连接关系</div>
+                    </a>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 实时数据页面 -->
+        <div id="realtime-page" class="page">
+            <div class="container">
+                <!-- 左侧面板 -->
+                <div class="left-panel">
+                    <div class="panel-header">实时数据监控</div>
+                    <div class="panel-content">
+                        <div id="status" class="status disconnected">未连接</div>
+                        <div id="instance-cards-container" class="instance-cards-container">
+                            <!-- 实例大卡片将动态生成 -->
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- 右侧面板 -->
+                <div class="right-panel">
+                    <div class="panel-header" id="right-panel-header">位号详情</div>
+                    <div id="param-detail-page" style="display: none; flex: 1; flex-direction: column; overflow: hidden; min-height: 0;">
+                        <!-- 历史数据趋势图 -->
+                        <div class="history-chart-container">
+                            <div class="history-controls" style="margin-bottom: 15px; flex-shrink: 0;">
+                                <label>历史时间段（秒）：</label>
+                                <input type="number" id="history-seconds" value="3600" min="1">
+                                <button onclick="loadHistoryData()">查询</button>
+                            </div>
+                            <canvas id="history-chart"></canvas>
+                        </div>
+                        <!-- 写值面板 -->
+                        <div class="tag-panel">
+                            <h3>位号写入</h3>
+                            <div class="tag-form">
+                                <label>参数值：</label>
+                                <input type="number" id="write-tag-value" placeholder="输入数值" step="any">
+                                <button onclick="writeTag()">写入</button>
+                                <span id="write-status" style="margin-left: 10px; color: #4CAF50;"></span>
+                            </div>
+                        </div>
+                    </div>
+                    <div id="right-panel-empty" style="flex: 1; display: flex; align-items: center; justify-content: center; color: #999; font-size: 18px;">
+                        请点击左侧参数卡片查看详情
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 组态页面 -->
+        <div id="configuration-page" class="page">
+            <div class="configuration-container">
+                <!-- 左侧：树形结构 -->
+                <div class="configuration-left">
+                    <div class="panel-header">组态配置</div>
+                    <div class="panel-content">
+                        <div id="configuration-tree" class="configuration-tree">
+                            <!-- 树形结构将动态生成 -->
+                        </div>
+                    </div>
+                </div>
+                <!-- 右侧：回路信息显示 -->
+                <div class="configuration-right">
+                    <div class="panel-header" id="configuration-header">回路详情</div>
+                    <div class="panel-content" id="configuration-detail">
+                        <div class="empty-state">请从左侧选择回路查看详情</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- 数据调试页面 -->
+        <div id="simulation-page" class="page">
+            <div class="simulation-page">
+                <div class="simulation-content">
+                    <!-- 左侧参数配置 -->
+                    <div class="simulation-left">
+                        <!-- 水箱参数 -->
+                        <div class="param-group">
+                            <h3>水箱参数</h3>
+                            <div class="param-row">
+                                <label>高度 (m):</label>
+                                <input type="number" id="tank-height" value="2.0" step="0.1">
+                            </div>
+                            <div class="param-row">
+                                <label>半径 (m):</label>
+                                <input type="number" id="tank-radius" value="0.5" step="0.1">
+                            </div>
+                            <div class="param-row">
+                                <label>入水口面积 (m²):</label>
+                                <input type="number" id="tank-inlet-area" value="0.06" step="0.01">
+                            </div>
+                            <div class="param-row">
+                                <label>入水速度 (m/s):</label>
+                                <input type="number" id="tank-inlet-velocity" value="3.0" step="0.1">
+                            </div>
+                            <div class="param-row">
+                                <label>出水口面积 (m²):</label>
+                                <input type="number" id="tank-outlet-area" value="0.001" step="0.001">
+                            </div>
+                            <div class="param-row">
+                                <label>初始水位 (m):</label>
+                                <input type="number" id="tank-initial-level" value="0.0" step="0.1">
+                            </div>
+                        </div>
+                        
+                        <!-- 阀门参数 -->
+                        <div class="param-group">
+                            <h3>阀门参数</h3>
+                            <div class="param-row">
+                                <label>最小开度 (%):</label>
+                                <input type="number" id="valve-min-opening" value="0.0" step="0.1">
+                            </div>
+                            <div class="param-row">
+                                <label>最大开度 (%):</label>
+                                <input type="number" id="valve-max-opening" value="100.0" step="0.1">
+                            </div>
+                            <div class="param-row">
+                                <label>满行程时间 (s):</label>
+                                <input type="number" id="valve-full-travel-time" value="5.0" step="0.1">
+                            </div>
+                        </div>
+                        
+                        <!-- PID参数 -->
+                        <div class="param-group">
+                            <h3>PID参数</h3>
+                            <div class="param-row">
+                                <label>比例系数 (Kp):</label>
+                                <input type="number" id="pid-kp" value="12.0" step="0.1">
+                            </div>
+                            <div class="param-row">
+                                <label>积分时间 (Ti):</label>
+                                <input type="number" id="pid-ti" value="30.0" step="0.1">
+                            </div>
+                            <div class="param-row">
+                                <label>微分时间 (Td):</label>
+                                <input type="number" id="pid-td" value="0.15" step="0.1">
+                            </div>
+                            <div class="param-row">
+                                <label>设定值 (SV，逗号分隔):</label>
+                                <input type="text" id="pid-sv" value="1.5,0.5,0">
+                            </div>
+                            <div class="param-row">
+                                <label>输出上限 (H):</label>
+                                <input type="number" id="pid-h" value="100.0" step="0.1">
+                            </div>
+                            <div class="param-row">
+                                <label>输出下限 (L):</label>
+                                <input type="number" id="pid-l" value="0.0" step="0.1">
+                            </div>
+                        </div>
+                        
+                        <!-- 模拟设置 -->
+                        <div class="param-group">
+                            <h3>模拟设置</h3>
+                            <div class="param-row">
+                                <label>模拟时长 (秒):</label>
+                                <input type="number" id="simulation-duration" value="900.0" step="1">
+                            </div>
+                        </div>
+                        
+                        <!-- 控制按钮 -->
+                        <div class="simulation-controls">
+                            <button class="btn-start" id="btn-start-simulation" onclick="startSimulation()">开始模拟</button>
+                        </div>
+                        
+                        <!-- 进度条 -->
+                        <div class="progress-bar-container" id="progress-container">
+                            <div class="progress-bar">
+                                <div class="progress-bar-fill" id="progress-fill" style="width: 0%">0%</div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- 右侧图表 -->
+                    <div class="simulation-right">
+                        <div class="chart-container">
+                            <div class="chart-title">PID控制曲线</div>
+                            <canvas id="simulation-chart"></canvas>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        // 路由映射
+        const routeMap = {
+            '/': 'home',
+            '/realtime-data': 'realtime',
+            '/simulation': 'simulation',
+            '/config_display': 'configuration'
+        };
+        
+        // 页面映射
+        const pageMap = {
+            'home': 'home-page',
+            'realtime': 'realtime-page',
+            'simulation': 'simulation-page',
+            'configuration': 'configuration-page'
+        };
+        
+        // 导航按钮映射
+        const navMap = {
+            'realtime': 'nav-realtime',
+            'simulation': 'nav-simulation',
+            'configuration': 'nav-config'
+        };
+        
+        // 根据路径切换页面
+        function switchPageByPath(path) {
+            const pageName = routeMap[path] || 'home';
+            const pageId = pageMap[pageName];
+            
+            // 隐藏所有页面
+            document.querySelectorAll('.page').forEach(page => {
+                page.classList.remove('active');
+            });
+            
+            // 移除所有导航按钮的active状态
+            document.querySelectorAll('.nav-button').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            
+            // 显示选中的页面
+            const targetPage = document.getElementById(pageId);
+            if (targetPage) {
+                targetPage.classList.add('active');
+            }
+            
+            // 设置导航按钮active状态
+            const navId = navMap[pageName];
+            if (navId) {
+                const navBtn = document.getElementById(navId);
+                if (navBtn) {
+                    navBtn.classList.add('active');
+                }
+            }
+            
+            // 根据页面加载相应数据和初始化
+            initializePage(pageName);
+        }
+        
+        // 处理导航链接点击
+        document.addEventListener('DOMContentLoaded', function() {
+            // 拦截导航链接点击（包括导航栏标题和所有链接）
+            document.querySelectorAll('a.nav-button, a.home-card, a[href="/"]').forEach(link => {
+                link.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    const href = this.getAttribute('href');
+                    if (href) {
+                        window.history.pushState({}, '', href);
+                        switchPageByPath(href);
+                    }
+                });
+            });
+            
+            // 监听浏览器前进后退
+            window.addEventListener('popstate', function() {
+                switchPageByPath(window.location.pathname);
+            });
+            
+            // 初始化页面
+            switchPageByPath(window.location.pathname);
+        });
+        
+        // 保留旧的switchPage函数以兼容（如果需要）
+        function switchPage(pageName) {
+            const path = Object.keys(routeMap).find(key => routeMap[key] === pageName);
+            if (path) {
+                window.history.pushState({}, '', path);
+                switchPageByPath(path);
+            }
+        }
+        
+        // 加载组态配置
+        async function loadConfiguration() {
+            try {
+                const response = await fetch('/api/configuration');
+                const result = await response.json();
+                
+                if (result.success) {
+                    displayConfiguration(result.data);
+                } else {
+                    console.error('Failed to load configuration:', result.message);
+                }
+            } catch (error) {
+                console.error('Failed to load configuration:', error);
+            }
+        }
+        
+        // 存储组态数据（全局）
+        let configurationData = null;
+        
+        // 显示组态配置
+        function displayConfiguration(data) {
+            configurationData = data;
+            
+            // 构建树形结构
+            buildConfigurationTree(data);
+        }
+        
+        // 构建树形结构
+        function buildConfigurationTree(data) {
+            const treeContainer = document.getElementById('configuration-tree');
+            treeContainer.innerHTML = '';
+            
+            const circuits = data.circuits;
+            
+            // 创建根节点
+            const rootNode = document.createElement('div');
+            rootNode.className = 'tree-node';
+            rootNode.innerHTML = `
+                <div class="tree-node-content" onclick="toggleTreeNode(this)">
+                    <span class="tree-node-icon expandable expanded"></span>
+                    <span class="tree-node-label">组态配置</span>
+                </div>
+                <div class="tree-node-children expanded">
+                    ${Object.keys(circuits).sort().map(circuitName => `
+                        <div class="tree-node">
+                            <div class="tree-node-content" onclick="selectCircuit('${circuitName}', this)">
+                                <span class="tree-node-icon expandable collapsed" onclick="event.stopPropagation(); toggleTreeNode(this.parentElement);"></span>
+                                <span class="tree-node-label">回路: ${circuitName}</span>
+                            </div>
+                            <div class="tree-node-children">
+                                ${circuits[circuitName].instances.map(instance => `
+                                    <div class="tree-node">
+                                        <div class="tree-node-content" onclick="selectCircuit('${circuitName}', this)">
+                                            <span class="tree-node-icon leaf"></span>
+                                            <span class="tree-node-label">${instance.name} (${instance.type === 'model' ? '模型' : '算法'})</span>
+                                        </div>
+                                    </div>
+                                `).join('')}
+                            </div>
+                        </div>
+                    `).join('')}
+                </div>
+            `;
+            
+            treeContainer.appendChild(rootNode);
+        }
+        
+        // 切换树节点展开/折叠
+        function toggleTreeNode(nodeElement) {
+            const children = nodeElement.parentElement.querySelector('.tree-node-children');
+            if (children) {
+                const icon = nodeElement.querySelector('.tree-node-icon.expandable');
+                if (children.classList.contains('expanded')) {
+                    children.classList.remove('expanded');
+                    icon.classList.remove('expanded');
+                    icon.classList.add('collapsed');
+                } else {
+                    children.classList.add('expanded');
+                    icon.classList.remove('collapsed');
+                    icon.classList.add('expanded');
+                }
+            }
+        }
+        
+        // 选择回路（点击回路或实例节点时调用）
+        function selectCircuit(circuitName, nodeElement) {
+            // 移除所有选中状态
+            document.querySelectorAll('.tree-node-content').forEach(node => {
+                node.classList.remove('selected');
+            });
+            
+            // 设置当前节点为选中状态
+            nodeElement.classList.add('selected');
+            
+            // 显示回路详情
+            displayCircuitDetail(circuitName);
+        }
+        
+        // 显示回路详情
+        function displayCircuitDetail(circuitName) {
+            const detailContainer = document.getElementById('configuration-detail');
+            const headerElement = document.getElementById('configuration-header');
+            
+            if (!configurationData || !configurationData.circuits[circuitName]) {
+                detailContainer.innerHTML = '<div class="empty-state">回路不存在</div>';
+                if (headerElement) {
+                    headerElement.textContent = '回路详情';
+                }
+                return;
+            }
+            
+            const circuit = configurationData.circuits[circuitName];
+            
+            // 更新标题，显示回路名称
+            if (headerElement) {
+                headerElement.textContent = `回路详情: ${circuitName}`;
+            }
+            
+            // 创建回路内容容器（不再使用circuit-card）
+            const circuitContent = document.createElement('div');
+            circuitContent.className = 'circuit-content';
+            
+            // 遍历回路中的实例
+            for (const instance of circuit.instances) {
+                // 创建实例卡片
+                const instanceCard = document.createElement('div');
+                instanceCard.className = 'instance-card';
+                
+                // 实例头部
+                const instanceHeader = document.createElement('div');
+                instanceHeader.className = 'instance-header';
+                instanceHeader.innerHTML = `
+                    <span>${instance.name}</span>
+                    <span class="instance-type">${instance.type === 'model' ? '模型' : '算法'}: ${instance.type_name}</span>
+                `;
+                instanceCard.appendChild(instanceHeader);
+                
+                // 实例内容
+                const instanceContent = document.createElement('div');
+                instanceContent.className = 'instance-content';
+                
+                // 构建参数连接关系映射（遍历所有连接，不仅仅是当前实例的连接）
+                const paramConnections = {};
+                const allConnections = configurationData.circuits[circuitName].instances.flatMap(inst => inst.connections || []);
+                
+                // 收集所有在连接中被引用的参数名（用于补充缺失的参数）
+                const referencedParams = new Set();
+                
+                for (const conn of allConnections) {
+                    // 解析连接关系
+                    const toParts = conn.to.split('.');
+                    const fromParts = conn.from.split('.');
+                    
+                    if (toParts.length === 2 && toParts[0] === instance.name) {
+                        // 这是输入连接（from xxx.xxx to instance.param）
+                        const paramName = toParts[1];
+                        referencedParams.add(paramName);
+                        if (!paramConnections[paramName]) {
+                            paramConnections[paramName] = { from: [], to: [] };
+                        }
+                        paramConnections[paramName].from.push(conn.from);
+                    }
+                    
+                    if (fromParts.length === 2 && fromParts[0] === instance.name) {
+                        // 这是输出连接（from instance.param to xxx.xxx）
+                        const paramName = fromParts[1];
+                        referencedParams.add(paramName);
+                        if (!paramConnections[paramName]) {
+                            paramConnections[paramName] = { from: [], to: [] };
+                        }
+                        paramConnections[paramName].to.push(conn.to);
+                    }
+                }
+                
+                // 构建完整的参数列表：包括instance.params中的参数 + 连接中引用但不在params中的参数
+                const existingParamNames = new Set(instance.params.map(p => p.name));
+                const allParams = [...instance.params];
+                
+                // 添加连接中引用但不在params中的参数
+                for (const paramName of referencedParams) {
+                    if (!existingParamNames.has(paramName)) {
+                        allParams.push({
+                            name: paramName,
+                            value: null,
+                            default: null,
+                            unit: '',
+                            desc: ''
+                        });
+                    }
+                }
+                
+                // 参数表格
+                const paramsTable = document.createElement('table');
+                paramsTable.className = 'params-table';
+                paramsTable.innerHTML = `
+                    <thead>
+                        <tr>
+                            <th>参数名</th>
+                            <th>参数值</th>
+                            <th>参数默认值</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${allParams.map(param => {
+                            const paramName = param.name;
+                            const connections = paramConnections[paramName] || { from: [], to: [] };
+                            
+                            // 构建参数名显示（包含连接关系）
+                            let nameDisplay = param.name;
+                            if (param.unit) {
+                                nameDisplay += ` (${param.unit})`;
+                            }
+                            if (param.desc) {
+                                nameDisplay += `<br><small style="color: #666;">${param.desc}</small>`;
+                            }
+                            
+                            // 添加来源连接标记（在参数名列）
+                            if (connections.from.length > 0) {
+                                // 显示完整位号，但去重避免重复显示
+                                const uniqueFrom = [...new Set(connections.from)];
+                                nameDisplay += '<br><span style="color: #2196F3; font-size: 12px;">[ from ' + uniqueFrom.join(', ') + ' ]</span>';
+                            }
+                            
+                            // 添加目标连接标记（在参数名列）
+                            if (connections.to.length > 0) {
+                                // 显示完整位号，但去重避免重复显示
+                                const uniqueTo = [...new Set(connections.to)];
+                                nameDisplay += '<br><span style="color: #4CAF50; font-size: 12px;">[ to ' + uniqueTo.join(', ') + ' ]</span>';
+                            }
+                            
+                            return `
+                                <tr>
+                                    <td>${nameDisplay}</td>
+                                    <td>${param.value !== null && param.value !== undefined ? param.value : '-'}</td>
+                                    <td>${param.default !== null && param.default !== undefined ? param.default : '-'}</td>
+                                </tr>
+                            `;
+                        }).join('')}
+                    </tbody>
+                `;
+                instanceContent.appendChild(paramsTable);
+                
+                instanceCard.appendChild(instanceContent);
+                circuitContent.appendChild(instanceCard);
+            }
+            
+            // 直接将内容添加到detailContainer，不再使用circuit-card
+            detailContainer.innerHTML = '';
+            detailContainer.appendChild(circuitContent);
+        }
+        
+        // WebSocket连接
+        const socket = io();
+        let historyChart = null;
+        let simulationChart = null;
+        let simulationData = [];
+        
+        // 初始化参数选择器
+        async function initParamSelects() {
+            try {
+                const response = await fetch('/api/configuration');
+                const result = await response.json();
+                if (result.success) {
+                    // 参数会在实时数据更新时自动显示
+                }
+            } catch (error) {
+                console.error('Failed to load configuration:', error);
+            }
+        }
+        
+        // WebSocket事件处理
+        socket.on('connect', () => {
+            document.getElementById('status').textContent = '已连接';
+            document.getElementById('status').className = 'status connected';
+        });
+        
+        socket.on('disconnect', () => {
+            document.getElementById('status').textContent = '未连接';
+            document.getElementById('status').className = 'status disconnected';
+        });
+        
+        socket.on('realtime_data', (data) => {
+            console.log('Realtime data received:', Object.keys(data.params || {}).length, 'parameters');
+            updateRealtimeDisplay(data.params);
+        });
+        
+        // 更新实时数据显示（按实例分组）
+        function updateRealtimeDisplay(params) {
+            const container = document.getElementById('instance-cards-container');
+            
+            // 按实例名分组参数
+            const instanceGroups = {};
+            for (const [paramName, value] of Object.entries(params)) {
+                const parts = paramName.split('.');
+                if (parts.length >= 2) {
+                    const instanceName = parts[0];
+                    const param = parts.slice(1).join('.');
+                    
+                    if (!instanceGroups[instanceName]) {
+                        instanceGroups[instanceName] = [];
+                    }
+                    instanceGroups[instanceName].push({
+                        fullName: paramName,
+                        paramName: param,
+                        value: value
+                    });
+                }
+            }
+            
+            // 清空容器
+            container.innerHTML = '';
+            
+            // 为每个实例创建大卡片
+            for (const [instanceName, paramsList] of Object.entries(instanceGroups)) {
+                // 创建实例大卡片
+                const instanceCard = document.createElement('div');
+                instanceCard.className = 'instance-card';
+                
+                // 实例标题
+                const instanceHeader = document.createElement('div');
+                instanceHeader.className = 'instance-header';
+                instanceHeader.textContent = instanceName;
+                instanceCard.appendChild(instanceHeader);
+                
+                // 参数网格
+                const paramGrid = document.createElement('div');
+                paramGrid.className = 'param-grid';
+                
+                // 为每个参数创建小卡片
+                for (const paramInfo of paramsList) {
+                    const paramCard = document.createElement('div');
+                    paramCard.className = 'param-card';
+                    paramCard.onclick = () => showParamDetailPage(paramInfo.fullName);
+                    paramCard.innerHTML = `
+                        <div class="param-name">${paramInfo.paramName}</div>
+                        <div class="param-value">${typeof paramInfo.value === 'number' ? paramInfo.value.toFixed(4) : paramInfo.value}</div>
+                    `;
+                    paramGrid.appendChild(paramCard);
+                }
+                
+                instanceCard.appendChild(paramGrid);
+                container.appendChild(instanceCard);
+            }
+        }
+        
+        // 显示位号详情页面（右侧）
+        function showParamDetailPage(paramName) {
+            // 显示右侧详情页面
+            document.getElementById('param-detail-page').style.display = 'flex';
+            document.getElementById('param-detail-page').style.flexDirection = 'column';
+            document.getElementById('right-panel-empty').style.display = 'none';
+            
+            // 更新标题
+            document.getElementById('right-panel-header').textContent = `位号详情: ${paramName}`;
+            
+            // 设置当前选中的位号
+            document.getElementById('param-detail-page').setAttribute('data-param-name', paramName);
+            
+            // 加载历史数据
+            loadHistoryData();
+        }
+        
+        // 加载历史数据（固定500点，自动采样）
+        async function loadHistoryData() {
+            const paramName = document.getElementById('param-detail-page').getAttribute('data-param-name');
+            const seconds = parseInt(document.getElementById('history-seconds').value) || 3600;
+            
+            if (!paramName) {
+                return;
+            }
+            
+            try {
+                // 计算时间范围
+                const endTime = new Date();
+                const startTime = new Date(endTime.getTime() - seconds * 1000);
+                
+                // 计算采样间隔（确保返回500个点）
+                const targetPoints = 500;
+                const sampleInterval = Math.max(0.1, seconds / targetPoints);
+                
+                let url = `/api/history?param_name=${encodeURIComponent(paramName)}&limit=${targetPoints}`;
+                url += `&start_time=${startTime.toISOString()}`;
+                url += `&end_time=${endTime.toISOString()}`;
+                url += `&sample_interval=${sampleInterval}`;
+                
+                console.log(`Querying history data: ${url}`);
+                const response = await fetch(url);
+                const result = await response.json();
+                
+                console.log(`History query result:`, result);
+                
+                if (result.success) {
+                    const records = result.data.reverse(); // 按时间正序
+                    
+                    console.log(`History query result: ${records.length} records for ${paramName} (sampled from ${seconds}s)`);
+                    
+                    const ctx = document.getElementById('history-chart').getContext('2d');
+                    
+                    if (historyChart) {
+                        historyChart.destroy();
+                    }
+                    
+                    if (records.length === 0) {
+                        // 没有数据时显示空图表
+                        historyChart = new Chart(ctx, {
+                            type: 'line',
+                            data: {
+                                labels: [],
+                                datasets: [{
+                                    label: paramName,
+                                    data: [],
+                                    borderColor: 'rgb(75, 192, 192)',
+                                    backgroundColor: 'rgba(75, 192, 192, 0.2)',
+                                    tension: 0.4,
+                                    borderWidth: 1.5,
+                                    pointRadius: 0,
+                                    pointHoverRadius: 0,
+                                    fill: false
+                                }]
+                            },
+                            options: {
+                                responsive: true,
+                                maintainAspectRatio: false,
+                                scales: {
+                                    y: {
+                                        beginAtZero: false
+                                    }
+                                },
+                                plugins: {
+                                    title: {
+                                        display: true,
+                                        text: '暂无历史数据'
+                                    }
+                                }
+                            }
+                        });
+                    } else {
+                        const labels = records.map(r => {
+                            const d = new Date(r.timestamp);
+                            return d.toLocaleString();
+                        });
+                        const values = records.map(r => r.param_value);
+                        
+                        historyChart = new Chart(ctx, {
+                            type: 'line',
+                            data: {
+                                labels: labels,
+                                datasets: [{
+                                    label: paramName,
+                                    data: values,
+                                    borderColor: 'rgb(75, 192, 192)',
+                                    backgroundColor: 'rgba(75, 192, 192, 0.2)',
+                                    tension: 0.4,
+                                    borderWidth: 1.5,
+                                    pointRadius: 0,
+                                    pointHoverRadius: 0,
+                                    fill: false
+                                }]
+                            },
+                            options: {
+                                responsive: true,
+                                maintainAspectRatio: false,
+                                scales: {
+                                    x: {
+                                        ticks: {
+                                            maxTicksLimit: 20
+                                        }
+                                    },
+                                    y: {
+                                        beginAtZero: false
+                                    }
+                                },
+                                plugins: {
+                                    tooltip: {
+                                        mode: 'index',
+                                        intersect: false
+                                    },
+                                    legend: {
+                                        display: true,
+                                        position: 'top'
+                                    }
+                                }
+                            }
+                        });
+                    }
+                } else {
+                    console.error('History query failed:', result.message);
+                    alert('查询失败: ' + (result.message || '未知错误'));
+                }
+            } catch (error) {
+                console.error('Failed to load history data:', error);
+                alert('加载历史数据失败: ' + error.message);
+            }
+        }
+        
+        // 写入位号
+        async function writeTag() {
+            const paramName = document.getElementById('param-detail-page').getAttribute('data-param-name');
+            const value = document.getElementById('write-tag-value').value;
+            const statusSpan = document.getElementById('write-status');
+            
+            if (!paramName) {
+                statusSpan.textContent = '请先选择位号';
+                statusSpan.style.color = '#f44336';
+                return;
+            }
+            
+            if (value === '') {
+                statusSpan.textContent = '请输入参数值';
+                statusSpan.style.color = '#f44336';
+                return;
+            }
+            
+            try {
+                const response = await fetch('/api/write_parameter', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        param_name: paramName,
+                        value: parseFloat(value)
+                    })
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    statusSpan.textContent = `写入成功: ${paramName} = ${value}`;
+                    statusSpan.style.color = '#4CAF50';
+                    
+                    // 3秒后清除状态
+                    setTimeout(() => {
+                        statusSpan.textContent = '';
+                    }, 3000);
+                } else {
+                    statusSpan.textContent = `写入失败: ${result.message}`;
+                    statusSpan.style.color = '#f44336';
+                }
+            } catch (error) {
+                console.error('Failed to write tag:', error);
+                statusSpan.textContent = '写入失败: ' + error.message;
+                statusSpan.style.color = '#f44336';
+            }
+        }
+        
+        // 开始模拟
+        async function startSimulation() {
+            const btn = document.getElementById('btn-start-simulation');
+            const progressContainer = document.getElementById('progress-container');
+            const progressFill = document.getElementById('progress-fill');
+            
+            // 获取参数
+            const params = {
+                tank: {
+                    height: parseFloat(document.getElementById('tank-height').value) || 2.0,
+                    radius: parseFloat(document.getElementById('tank-radius').value) || 0.5,
+                    inlet_area: parseFloat(document.getElementById('tank-inlet-area').value) || 0.06,
+                    inlet_velocity: parseFloat(document.getElementById('tank-inlet-velocity').value) || 3.0,
+                    outlet_area: parseFloat(document.getElementById('tank-outlet-area').value) || 0.001,
+                    initial_level: parseFloat(document.getElementById('tank-initial-level').value) || 0.0
+                },
+                valve: {
+                    min_opening: parseFloat(document.getElementById('valve-min-opening').value) || 0.0,
+                    max_opening: parseFloat(document.getElementById('valve-max-opening').value) || 100.0,
+                    full_travel_time: parseFloat(document.getElementById('valve-full-travel-time').value) || 5.0
+                },
+                pid: {
+                    kp: parseFloat(document.getElementById('pid-kp').value) || 12.0,
+                    ti: parseFloat(document.getElementById('pid-ti').value) || 30.0,
+                    td: parseFloat(document.getElementById('pid-td').value) || 0.15,
+                    sv: document.getElementById('pid-sv').value || '1.5,0.5,0',
+                    h: parseFloat(document.getElementById('pid-h').value) || 100.0,
+                    l: parseFloat(document.getElementById('pid-l').value) || 0.0
+                },
+                duration: parseFloat(document.getElementById('simulation-duration').value) || 900.0
+            };
+            
+            // 解析SV值
+            const svValues = params.pid.sv.split(',').map(v => parseFloat(v.trim())).filter(v => !isNaN(v));
+            if (svValues.length === 0) {
+                alert('SV设定值格式错误！');
+                return;
+            }
+            
+            // 禁用按钮
+            btn.disabled = true;
+            btn.textContent = '模拟中...';
+            progressContainer.classList.add('active');
+            progressFill.style.width = '0%';
+            progressFill.textContent = '0%';
+            
+            // 清空之前的数据
+            simulationData = [];
+            
+            // 初始化图表
+            initSimulationChart();
+            
+            try {
+                const response = await fetch('/api/simulation/start', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        ...params,
+                        pid: {
+                            ...params.pid,
+                            sv_values: svValues
+                        }
+                    })
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    // 开始轮询进度
+                    pollSimulationProgress(result.task_id);
+                } else {
+                    alert('启动模拟失败: ' + (result.message || '未知错误'));
+                    btn.disabled = false;
+                    btn.textContent = '开始模拟';
+                    progressContainer.classList.remove('active');
+                }
+            } catch (error) {
+                console.error('Failed to start simulation:', error);
+                alert('启动模拟失败: ' + error.message);
+                btn.disabled = false;
+                btn.textContent = '开始模拟';
+                progressContainer.classList.remove('active');
+            }
+        }
+        
+        // 轮询模拟进度
+        async function pollSimulationProgress(taskId) {
+            const progressFill = document.getElementById('progress-fill');
+            const btn = document.getElementById('btn-start-simulation');
+            const progressContainer = document.getElementById('progress-container');
+            
+            const pollInterval = setInterval(async () => {
+                try {
+                    const response = await fetch(`/api/simulation/status/${taskId}`);
+                    const result = await response.json();
+                    
+                    if (result.success) {
+                        const status = result.status;
+                        
+                        // 更新进度
+                        if (status.progress !== undefined) {
+                            progressFill.style.width = status.progress + '%';
+                            progressFill.textContent = Math.round(status.progress) + '%';
+                        }
+                        
+                        // 更新数据
+                        if (status.data && status.data.length > 0) {
+                            simulationData = status.data;
+                            updateSimulationChart();
+                        }
+                        
+                        // 检查是否完成
+                        if (status.status === 'completed') {
+                            clearInterval(pollInterval);
+                            btn.disabled = false;
+                            btn.textContent = '开始模拟';
+                            progressFill.style.width = '100%';
+                            progressFill.textContent = '100%';
+                            
+                            // 获取最终数据
+                            const finalResponse = await fetch(`/api/simulation/result/${taskId}`);
+                            const finalResult = await finalResponse.json();
+                            
+                            if (finalResult.success) {
+                                simulationData = finalResult.data;
+                                updateSimulationChart();
+                            }
+                            
+                            setTimeout(() => {
+                                progressContainer.classList.remove('active');
+                            }, 2000);
+                        } else if (status.status === 'error') {
+                            clearInterval(pollInterval);
+                            btn.disabled = false;
+                            btn.textContent = '开始模拟';
+                            progressContainer.classList.remove('active');
+                            alert('模拟失败: ' + (status.error || '未知错误'));
+                        }
+                    }
+                } catch (error) {
+                    console.error('Failed to poll simulation status:', error);
+                }
+            }, 500); // 每500ms轮询一次
+        }
+        
+        // 初始化模拟图表
+        function initSimulationChart() {
+            const ctx = document.getElementById('simulation-chart').getContext('2d');
+            
+            if (simulationChart) {
+                simulationChart.destroy();
+            }
+            
+            simulationChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: [],
+                    datasets: [
+                        {
+                            label: 'SV',
+                            data: [],
+                            borderColor: 'rgb(33, 150, 243)',
+                            backgroundColor: 'rgba(33, 150, 243, 0.1)',
+                            tension: 0.4,
+                            borderWidth: 1.5,
+                            pointRadius: 0,
+                            yAxisID: 'y'
+                        },
+                        {
+                            label: 'PV',
+                            data: [],
+                            borderColor: 'rgb(0, 188, 212)',
+                            backgroundColor: 'rgba(0, 188, 212, 0.1)',
+                            tension: 0.4,
+                            borderWidth: 1.5,
+                            pointRadius: 0,
+                            yAxisID: 'y'
+                        },
+                        {
+                            label: 'MV',
+                            data: [],
+                            borderColor: 'rgb(255, 152, 0)',
+                            backgroundColor: 'rgba(255, 152, 0, 0.1)',
+                            tension: 0.4,
+                            borderWidth: 1.5,
+                            pointRadius: 0,
+                            linestyle: 'dashed',
+                            yAxisID: 'y1'
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    interaction: {
+                        mode: 'index',
+                        intersect: false
+                    },
+                    scales: {
+                        x: {
+                            title: {
+                                display: true,
+                                text: '模拟时间 (秒)'
+                            }
+                        },
+                        y: {
+                            type: 'linear',
+                            display: true,
+                            position: 'left',
+                            title: {
+                                display: true,
+                                text: 'SV / PV'
+                            }
+                        },
+                        y1: {
+                            type: 'linear',
+                            display: true,
+                            position: 'right',
+                            title: {
+                                display: true,
+                                text: 'MV'
+                            },
+                            grid: {
+                                drawOnChartArea: false
+                            }
+                        }
+                    },
+                    plugins: {
+                        legend: {
+                            display: true,
+                            position: 'top'
+                        }
+                    }
+                }
+            });
+        }
+        
+        // 更新模拟图表
+        function updateSimulationChart() {
+            if (!simulationChart || simulationData.length === 0) {
+                return;
+            }
+            
+            const simTimes = simulationData.map(r => r.sim_time);
+            const svValues = simulationData.map(r => r['pid.sv'] || 0);
+            const pvValues = simulationData.map(r => r['pid.pv'] || 0);
+            const mvValues = simulationData.map(r => r['pid.mv'] || 0);
+            
+            simulationChart.data.labels = simTimes;
+            simulationChart.data.datasets[0].data = svValues;
+            simulationChart.data.datasets[1].data = pvValues;
+            simulationChart.data.datasets[2].data = mvValues;
+            simulationChart.update('none'); // 不显示动画，提高性能
+        }
+        
+        // 实时数据请求定时器
+        let realtimeInterval = null;
+        
+        // 初始化函数（在页面切换时调用）
+        function initializePage(pageName) {
+            // 清除之前的定时器
+            if (realtimeInterval) {
+                clearInterval(realtimeInterval);
+                realtimeInterval = null;
+            }
+            
+            if (pageName === 'realtime') {
+                // 实时数据页面初始化
+                initParamSelects();
+                // 请求实时数据
+                socket.emit('request_realtime');
+                // 定期请求实时数据（秒级刷新：1000ms）
+                realtimeInterval = setInterval(() => {
+                    socket.emit('request_realtime');
+                }, 1000);
+            } else if (pageName === 'simulation') {
+                // 数据调试页面初始化
+                initSimulationChart();
+            } else if (pageName === 'configuration') {
+                // 组态页面初始化
+                loadConfiguration();
+            }
+        }
+    </script>
+</body>
+</html>
