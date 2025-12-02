@@ -1,0 +1,138 @@
+2025-11-27 20:23:39,904 - INFO - CylindricalTank initialized: height=2.0, radius=0.5, initial_level=0.0
+2025-11-27 20:23:39,905 - INFO - Valve initialized: range=[0.0, 100.0], full_travel_time=5.0s
+2025-11-27 20:23:39,905 - INFO - PID 'PID' initialized: kp=12.0, ti=30.0s, td=0.15s, output_range=[0.0, 100.0], sample_time=0.5s
+2025-11-27 20:23:39,906 - INFO - Clock initialized with cycle_time=0.5s
+2025-11-27 20:23:39,906 - INFO - Clock started
+2025-11-27 20:23:40,395 - INFO - Clock stopped at time=1800.00s
+2025-11-27 20:23:47,875 - INFO - CylindricalTank initialized: height=2.0, radius=0.5, initial_level=0.0
+2025-11-27 20:23:47,875 - INFO - Valve initialized: range=[0.0, 100.0], full_travel_time=5.0s
+2025-11-27 20:23:47,877 - INFO - PID 'PID' initialized: kp=12.0, ti=30.0s, td=0.15s, output_range=[0.0, 100.0], sample_time=0.5s
+2025-11-27 20:23:47,877 - INFO - Clock initialized with cycle_time=0.5s
+2025-11-27 20:23:47,877 - INFO - Clock started
+2025-11-27 20:23:48,375 - INFO - Clock stopped at time=1800.00s
+2025-11-27 20:24:08,797 - INFO - CylindricalTank initialized: height=4.0, radius=0.5, initial_level=0.0
+2025-11-27 20:24:08,797 - INFO - Valve initialized: range=[0.0, 100.0], full_travel_time=5.0s
+2025-11-27 20:24:08,797 - INFO - PID 'PID' initialized: kp=12.0, ti=30.0s, td=0.15s, output_range=[0.0, 100.0], sample_time=0.5s
+2025-11-27 20:24:08,797 - INFO - Clock initialized with cycle_time=0.5s
+2025-11-27 20:24:08,797 - INFO - Clock started
+2025-11-27 20:24:09,319 - INFO - Clock stopped at time=1800.00s
+2025-11-27 20:24:15,461 - INFO - CylindricalTank initialized: height=4.0, radius=0.5, initial_level=0.0
+2025-11-27 20:24:15,461 - INFO - Valve initialized: range=[0.0, 100.0], full_travel_time=5.0s
+2025-11-27 20:24:15,461 - INFO - PID 'PID' initialized: kp=12.0, ti=30.0s, td=0.15s, output_range=[0.0, 100.0], sample_time=0.5s
+2025-11-27 20:24:15,461 - INFO - Clock initialized with cycle_time=0.5s
+2025-11-27 20:24:15,462 - INFO - Clock started
+2025-11-27 20:24:15,978 - INFO - Clock stopped at time=1800.00s
+2025-11-27 20:37:15,507 - INFO - CylindricalTank initialized: height=4.0, radius=0.5, initial_level=0.0
+2025-11-27 20:37:15,508 - INFO - Valve initialized: range=[0.0, 100.0], full_travel_time=5.0s
+2025-11-27 20:37:15,508 - INFO - PID 'PID' initialized: kp=12.0, ti=30.0s, td=0.15s, output_range=[0.0, 100.0], sample_time=0.5s
+2025-11-27 20:37:15,508 - INFO - Clock initialized with cycle_time=0.5s
+2025-11-27 20:37:15,508 - INFO - Clock started
+2025-11-27 20:37:16,056 - INFO - Clock stopped at time=1800.00s
+2025-11-27 20:46:41,997 - INFO - CylindricalTank initialized: height=4.0, radius=0.5, initial_level=0.0
+2025-11-27 20:46:41,998 - INFO - Valve initialized: range=[0.0, 100.0], full_travel_time=5.0s
+2025-11-27 20:46:41,998 - INFO - PID 'PID' initialized: kp=12.0, ti=30.0s, td=0.15s, output_range=[0.0, 100.0], sample_time=0.5s
+2025-11-27 20:46:41,998 - INFO - Clock initialized with cycle_time=0.5s
+2025-11-27 20:46:41,998 - INFO - Clock started
+2025-11-27 20:46:46,927 - INFO - Clock stopped at time=18000.00s
+2025-11-27 20:46:58,374 - INFO - CylindricalTank initialized: height=4.0, radius=0.5, initial_level=0.0
+2025-11-27 20:46:58,374 - INFO - Valve initialized: range=[0.0, 100.0], full_travel_time=5.0s
+2025-11-27 20:46:58,374 - INFO - PID 'PID' initialized: kp=12.0, ti=30.0s, td=0.15s, output_range=[0.0, 100.0], sample_time=0.5s
+2025-11-27 20:46:58,374 - INFO - Clock initialized with cycle_time=0.5s
+2025-11-27 20:46:58,374 - INFO - Clock started
+2025-11-27 20:47:03,513 - INFO - Clock stopped at time=18000.00s
+2025-11-27 20:47:09,673 - INFO - CylindricalTank initialized: height=4.0, radius=0.5, initial_level=0.0
+2025-11-27 20:47:09,673 - INFO - Valve initialized: range=[0.0, 100.0], full_travel_time=5.0s
+2025-11-27 20:47:09,673 - INFO - PID 'PID' initialized: kp=12.0, ti=30.0s, td=0.15s, output_range=[0.0, 100.0], sample_time=0.5s
+2025-11-27 20:47:09,673 - INFO - Clock initialized with cycle_time=0.5s
+2025-11-27 20:47:09,673 - INFO - Clock started
+2025-11-27 20:47:15,015 - INFO - Clock stopped at time=18000.00s
+2025-11-27 20:47:28,229 - INFO - CylindricalTank initialized: height=4.0, radius=0.5, initial_level=0.0
+2025-11-27 20:47:28,229 - INFO - Valve initialized: range=[0.0, 100.0], full_travel_time=5.0s
+2025-11-27 20:47:28,229 - INFO - PID 'PID' initialized: kp=40.0, ti=30.0s, td=0.15s, output_range=[0.0, 100.0], sample_time=0.5s
+2025-11-27 20:47:28,229 - INFO - Clock initialized with cycle_time=0.5s
+2025-11-27 20:47:28,229 - INFO - Clock started
+2025-11-27 20:47:33,411 - INFO - Clock stopped at time=18000.00s
+2025-11-27 20:47:39,226 - INFO - CylindricalTank initialized: height=4.0, radius=0.5, initial_level=0.0
+2025-11-27 20:47:39,226 - INFO - Valve initialized: range=[0.0, 100.0], full_travel_time=5.0s
+2025-11-27 20:47:39,226 - INFO - PID 'PID' initialized: kp=40.0, ti=30.0s, td=0.15s, output_range=[0.0, 100.0], sample_time=0.5s
+2025-11-27 20:47:39,226 - INFO - Clock initialized with cycle_time=0.5s
+2025-11-27 20:47:39,226 - INFO - Clock started
+2025-11-27 20:47:44,657 - INFO - Clock stopped at time=18000.00s
+2025-11-27 20:47:50,931 - INFO - CylindricalTank initialized: height=4.0, radius=0.5, initial_level=0.0
+2025-11-27 20:47:50,931 - INFO - Valve initialized: range=[0.0, 100.0], full_travel_time=5.0s
+2025-11-27 20:47:50,932 - INFO - PID 'PID' initialized: kp=40.0, ti=30.0s, td=0.15s, output_range=[0.0, 100.0], sample_time=0.5s
+2025-11-27 20:47:50,932 - INFO - Clock initialized with cycle_time=0.5s
+2025-11-27 20:47:50,932 - INFO - Clock started
+2025-11-27 20:47:55,969 - INFO - Clock stopped at time=18000.00s
+2025-11-27 20:48:19,697 - INFO - CylindricalTank initialized: height=4.0, radius=0.5, initial_level=0.0
+2025-11-27 20:48:19,697 - INFO - Valve initialized: range=[0.0, 100.0], full_travel_time=5.0s
+2025-11-27 20:48:19,698 - INFO - PID 'PID' initialized: kp=40.0, ti=30.0s, td=0.15s, output_range=[0.0, 100.0], sample_time=0.5s
+2025-11-27 20:48:19,698 - INFO - Clock initialized with cycle_time=0.5s
+2025-11-27 20:48:19,698 - INFO - Clock started
+2025-11-27 20:48:25,247 - INFO - Clock stopped at time=18000.00s
+2025-11-28 09:06:44,704 - INFO - CylindricalTank initialized: height=2.0, radius=0.5, initial_level=0.0
+2025-11-28 09:06:44,705 - INFO - Valve initialized: range=[0.0, 100.0], full_travel_time=5.0s
+2025-11-28 09:06:44,705 - INFO - PID 'PID' initialized: kp=12.0, ti=30.0s, td=0.15s, output_range=[0.0, 100.0], sample_time=0.5s
+2025-11-28 09:06:44,705 - INFO - Clock initialized with cycle_time=0.5s
+2025-11-28 09:06:44,705 - INFO - Clock started
+2025-11-28 09:06:44,960 - INFO - Clock stopped at time=900.00s
+2025-11-28 09:08:48,858 - INFO - CylindricalTank initialized: height=2.0, radius=0.5, initial_level=0.0
+2025-11-28 09:08:48,858 - INFO - Valve initialized: range=[0.0, 100.0], full_travel_time=5.0s
+2025-11-28 09:08:48,858 - INFO - PID 'PID' initialized: kp=12.0, ti=30.0s, td=0.15s, output_range=[0.0, 100.0], sample_time=0.5s
+2025-11-28 09:08:48,858 - INFO - Clock initialized with cycle_time=0.5s
+2025-11-28 09:08:48,859 - INFO - Clock started
+2025-11-28 09:08:49,123 - INFO - Clock stopped at time=900.00s
+2025-11-28 09:09:03,605 - INFO - CylindricalTank initialized: height=2.0, radius=0.5, initial_level=0.0
+2025-11-28 09:09:03,605 - INFO - Valve initialized: range=[0.0, 100.0], full_travel_time=5.0s
+2025-11-28 09:09:03,605 - INFO - PID 'PID' initialized: kp=12.0, ti=30.0s, td=0.15s, output_range=[0.0, 100.0], sample_time=0.5s
+2025-11-28 09:09:03,605 - INFO - Clock initialized with cycle_time=0.5s
+2025-11-28 09:09:03,606 - INFO - Clock started
+2025-11-28 09:09:06,459 - INFO - Clock stopped at time=10000.00s
+2025-12-02 09:52:29,112 - INFO - CylindricalTank initialized: height=2.0, radius=0.5, initial_level=0.0
+2025-12-02 09:52:29,112 - INFO - Valve initialized: range=[0.0, 100.0], full_travel_time=5.0s
+2025-12-02 09:52:29,112 - INFO - PID 'PID' initialized: kp=12.0, ti=30.0s, td=0.15s, output_range=[0.0, 100.0], sample_time=0.5s
+2025-12-02 09:52:29,112 - INFO - Clock initialized with cycle_time=0.5s
+2025-12-02 09:52:29,112 - INFO - Clock started
+2025-12-02 09:52:29,351 - INFO - Clock stopped at time=900.00s
+2025-12-02 09:54:20,729 - INFO - CylindricalTank initialized: height=2.0, radius=0.5, initial_level=0.0
+2025-12-02 09:54:20,729 - INFO - Valve initialized: range=[0.0, 100.0], full_travel_time=5.0s
+2025-12-02 09:54:20,729 - INFO - PID 'PID' initialized: kp=12.0, ti=30.0s, td=0.15s, output_range=[0.0, 100.0], sample_time=0.5s
+2025-12-02 09:54:20,729 - INFO - Clock initialized with cycle_time=0.5s
+2025-12-02 09:54:20,729 - INFO - Clock started
+2025-12-02 09:54:20,987 - INFO - Clock stopped at time=900.00s
+2025-12-02 10:04:30,248 - INFO - CylindricalTank initialized: height=2.0, radius=0.5, initial_level=0.0
+2025-12-02 10:04:30,248 - INFO - Valve initialized: range=[0.0, 100.0], full_travel_time=5.0s
+2025-12-02 10:04:30,248 - INFO - PID 'PID' initialized: kp=12.0, ti=30.0s, td=0.15s, output_range=[0.0, 100.0], sample_time=0.5s
+2025-12-02 10:04:30,248 - INFO - Clock initialized with cycle_time=0.5s
+2025-12-02 10:04:30,248 - INFO - Clock started
+2025-12-02 10:04:30,523 - INFO - Clock stopped at time=900.00s
+2025-12-02 10:16:34,998 - INFO - CylindricalTank initialized: height=2.0, radius=0.5, initial_level=0.0
+2025-12-02 10:16:34,998 - INFO - Valve initialized: range=[0.0, 100.0], full_travel_time=5.0s
+2025-12-02 10:16:34,998 - INFO - PID 'PID' initialized: kp=12.0, ti=30.0s, td=0.15s, output_range=[0.0, 100.0], sample_time=0.5s
+2025-12-02 10:16:34,998 - INFO - Clock initialized with cycle_time=0.5s
+2025-12-02 10:16:34,999 - INFO - Clock started
+2025-12-02 10:16:35,258 - INFO - Clock stopped at time=900.00s
+2025-12-02 10:20:01,208 - INFO - CylindricalTank initialized: height=2.0, radius=0.5, initial_level=0.0
+2025-12-02 10:20:01,208 - INFO - Valve initialized: range=[0.0, 100.0], full_travel_time=5.0s
+2025-12-02 10:20:01,208 - INFO - PID 'PID' initialized: kp=12.0, ti=30.0s, td=0.15s, output_range=[0.0, 100.0], sample_time=0.5s
+2025-12-02 10:20:01,208 - INFO - Clock initialized with cycle_time=0.5s
+2025-12-02 10:20:01,208 - INFO - Clock started
+2025-12-02 10:20:01,459 - INFO - Clock stopped at time=900.00s
+2025-12-02 10:31:15,230 - INFO - CylindricalTank initialized: height=2.0, radius=0.5, initial_level=0.0
+2025-12-02 10:31:15,230 - INFO - Valve initialized: range=[0.0, 100.0], full_travel_time=5.0s
+2025-12-02 10:31:15,230 - INFO - PID 'PID' initialized: kp=12.0, ti=30.0s, td=0.15s, output_range=[0.0, 100.0], sample_time=0.5s
+2025-12-02 10:31:15,231 - INFO - Clock initialized with cycle_time=0.5s
+2025-12-02 10:31:15,231 - INFO - Clock started
+2025-12-02 10:31:15,488 - INFO - Clock stopped at time=900.00s
+2025-12-02 10:35:36,967 - INFO - CylindricalTank initialized: height=2.0, radius=0.5, initial_level=0.0
+2025-12-02 10:35:36,967 - INFO - Valve initialized: range=[0.0, 100.0], full_travel_time=5.0s
+2025-12-02 10:35:36,967 - INFO - PID 'PID' initialized: kp=12.0, ti=30.0s, td=0.15s, output_range=[0.0, 100.0], sample_time=0.5s
+2025-12-02 10:35:36,967 - INFO - Clock initialized with cycle_time=0.5s
+2025-12-02 10:35:36,967 - INFO - Clock started
+2025-12-02 10:35:37,245 - INFO - Clock stopped at time=900.00s
+2025-12-02 10:48:16,409 - INFO - CylindricalTank initialized: height=2.0, radius=0.5, initial_level=0.0
+2025-12-02 10:48:16,409 - INFO - Valve initialized: range=[0.0, 100.0], full_travel_time=5.0s
+2025-12-02 10:48:16,409 - INFO - PID 'PID' initialized: kp=12.0, ti=30.0s, td=0.15s, output_range=[0.0, 100.0], sample_time=0.5s
+2025-12-02 10:48:16,409 - INFO - Clock initialized with cycle_time=0.5s
+2025-12-02 10:48:16,409 - INFO - Clock started
+2025-12-02 10:48:16,647 - INFO - Clock stopped at time=900.00s

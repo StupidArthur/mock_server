@@ -1,0 +1,4 @@
+系统位号名	底层位号名	位号类型	数据源名称（一次位号）	单位	数据类型	取值表达式（二次位号）	位号值（虚位号）	采集频率	缓存数量	是否为向量位号	位号值高限	位号值高二限	位号值高三限	位号值低限	位号值低二限	位号值低三限	描述	节点名
+pid_test.pid.sv	1_pid_test.pid.sv	一次位号	yzc_test		DOUBLE			1	100	TRUE							pid_test.pid.sv	根节点
+pid_test.pid.pv	1_pid_test.pid.pv	一次位号	yzc_test		DOUBLE			1	100	TRUE							pid_test.pid.pv	根节点
+pid_test.pid.mv	1_pid_test.pid.mv	一次位号	yzc_test		DOUBLE			1	100	TRUE							pid_test.pid.mv	根节点

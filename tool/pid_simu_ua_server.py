@@ -5,10 +5,21 @@
 import sys
 import os
 import ast
-import time
 import asyncio
+import csv
+import json
+import socket
+from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Dict, Any, List, Optional
+
+# 导入openpyxl用于Excel文件操作
+try:
+    from openpyxl import Workbook
+    from openpyxl.styles import Font, Alignment
+    OPENPYXL_AVAILABLE = True
+except ImportError:
+    OPENPYXL_AVAILABLE = False
 
 # 添加项目根目录到Python路径
 SCRIPT_DIR = Path(__file__).parent.parent.absolute()
@@ -17,7 +28,7 @@ sys.path.insert(0, str(SCRIPT_DIR))
 from PyQt6.QtWidgets import (
     QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout, QGridLayout,
     QLabel, QLineEdit, QPushButton, QGroupBox,
-    QMessageBox, QProgressBar, QFrame
+    QMessageBox, QProgressBar, QFrame, QFileDialog
 )
 from PyQt6.QtCore import Qt, QThread, pyqtSignal
 from PyQt6.QtGui import QFont
@@ -41,6 +52,48 @@ from plc.clock import Clock
 from module.cylindrical_tank import CylindricalTank
 from module.valve import Valve
 from algorithm.pid import PID
+from utils.logger import get_logger
+
+# 初始化日志
+logger = get_logger()
+
+
+# 常量定义
+class Constants:
+    """常量定义"""
+    # 更新频率常量
+    CHART_UPDATE_INTERVAL = 50  # 每50个记录更新一次图表
+    DATA_UPDATE_INTERVAL = 10    # 每10个周期发送一次数据更新信号
+    
+    # 默认时间常量
+    DEFAULT_TIME_INTERVAL = 0.5  # 默认时间间隔（秒）
+    DEFAULT_BASE_TIME = datetime(2024, 6, 3, 19, 0, 0)  # 默认基准时间
+    
+    # 端口范围
+    MIN_PORT = 1
+    MAX_PORT = 65535
+    
+    # 位号定义（统一管理所有位号）
+    TAG_DEFINITIONS = [
+        ('pid.sv', 'PID设定值'),
+        ('pid.pv', 'PID过程值'),
+        ('pid.mv', 'PID输出值'),
+        ('pid.kp', 'PID比例系数'),
+        ('pid.td', 'PID微分时间'),
+        ('pid.ti', 'PID积分时间'),
+        ('tank.level', '水箱液位'),
+        ('valve.current_opening', '阀门开度')
+    ]
+    
+    @classmethod
+    def get_tag_keys(cls):
+        """获取所有位号键列表"""
+        return [tag[0] for tag in cls.TAG_DEFINITIONS]
+    
+    @classmethod
+    def get_tag_descriptions(cls):
+        """获取位号描述字典"""
+        return {tag[0]: tag[1] for tag in cls.TAG_DEFINITIONS}
 
 
 class SimulationThread(QThread):
@@ -82,6 +135,8 @@ class SimulationThread(QThread):
     
     def run(self):
         """运行模拟"""
+        clock = None
+        data_records = []
         try:
             # 初始化模型和算法
             tank = CylindricalTank(**self.tank_params)
@@ -150,27 +205,38 @@ class SimulationThread(QThread):
                     'pid.sv': pid.input['sv'],
                     'pid.pv': pid.input['pv'],
                     'pid.mv': pid.output['mv'],
+                    'pid.kp': pid.config['kp'],
+                    'pid.td': pid.config['td'],
+                    'pid.ti': pid.config['ti'],
                     'tank.level': tank_level,
                     'valve.current_opening': valve_opening
                 }
                 data_records.append(record)
                 
                 # 发送数据更新信号（每10个周期发送一次，避免UI阻塞）
-                if len(data_records) % 10 == 0:
+                if len(data_records) % Constants.DATA_UPDATE_INTERVAL == 0:
                     self.data_updated.emit(record)
                     progress = (clock.current_time / target_sim_time) * 100
                     self.progress_updated.emit(progress, len(data_records))
-            
-            clock.stop()
             
             # 发送完成信号
             self.finished.emit(data_records)
             
         except Exception as e:
-            print(f"Simulation error: {e}")
+            logger.error(f"Simulation error: {e}")
             import traceback
             traceback.print_exc()
-            self.finished.emit([])
+            data_records = []
+        finally:
+            # 确保时钟资源被正确清理
+            if clock:
+                try:
+                    clock.stop()
+                except Exception as e:
+                    logger.warning(f"Error stopping clock: {e}")
+            # 如果异常发生，发送空列表
+            if not data_records:
+                self.finished.emit([])
 
 
 class OPCUAServerThread(QThread):
@@ -255,8 +321,8 @@ class OPCUAServerThread(QThread):
             if self._server:
                 try:
                     await self._server.stop()
-                except:
-                    pass
+                except Exception as e:
+                    logger.warning(f"Error stopping OPCUA server: {e}")
             self.finished.emit()
     
     async def _init_server(self):
@@ -327,25 +393,37 @@ class OPCUAServerThread(QThread):
                             initial_value = parsed[0] if parsed else 0.0
                         else:
                             initial_value = float(parsed) if isinstance(parsed, (int, float)) else 0.0
-                    except:
+                    except (ValueError, SyntaxError) as e:
+                        logger.debug(f"Failed to parse value as literal: {e}")
                         try:
                             initial_value = float(initial_value)
-                        except:
+                        except (ValueError, TypeError) as e2:
+                            logger.debug(f"Failed to convert to float: {e2}")
                             initial_value = 0.0
                 
                 # 确保是数值类型
                 if not isinstance(initial_value, (int, float)):
                     initial_value = 0.0
                 
-                # 创建变量节点（使用string类型的NodeId，值为实例名.参数名）
+                # 创建变量节点（使用string类型的NodeId，值为格式化后的位号名）
+                # 格式：{实例名}_{param_prefix}.{param_suffix.UPPER}
                 # 例如：如果instance_name="PID_TEST_1"，param_name="pid.mv"
-                # 则NodeId为"PID_TEST_1.pid.mv"
-                node_id = f"{self.instance_name}.{param_name}"
+                # 则NodeId为字符串"PID_TEST_1_pid.MV"
+                # 注意：这里需要从主窗口获取格式化函数，暂时使用简单实现
+                if '.' in param_name:
+                    param_prefix, param_suffix = param_name.split('.', 1)
+                    param_suffix_upper = param_suffix.upper()
+                    node_id_string = f"{self.instance_name}_{param_prefix}.{param_suffix_upper}"
+                else:
+                    node_id_string = f"{self.instance_name}_{param_name.upper()}"
+                
+                # 显式创建字符串类型的NodeId（传入字符串会自动创建String类型的NodeId）
+                node_id = ua.NodeId(node_id_string, namespace_idx)
+                # 使用NodeId对象和Variant创建变量节点，确保使用字符串类型的NodeId
                 var_node = await plc_obj.add_variable(
-                    namespace_idx,
-                    node_id,  # NodeId使用string类型，值为实例名.参数名
-                    initial_value,
-                    varianttype=ua.VariantType.Double
+                    node_id,  # NodeId对象（字符串类型，值为格式化后的位号名）
+                    node_id_string,  # 节点的显示名称（BrowseName）
+                    ua.Variant(initial_value, ua.VariantType.Double)  # 使用Variant包装值
                 )
                 
                 # 设置节点属性
@@ -372,12 +450,12 @@ class OPCUAServerThread(QThread):
             interval = curr_time - prev_time
             time_intervals.append(interval)
         
-        # 如果没有时间间隔，使用默认值0.5秒
+        # 如果没有时间间隔，使用默认值
         if not time_intervals:
-            default_interval = 0.5
+            default_interval = Constants.DEFAULT_TIME_INTERVAL
         else:
             # 使用第一个时间间隔作为默认值
-            default_interval = time_intervals[0] if time_intervals else 0.5
+            default_interval = time_intervals[0] if time_intervals else Constants.DEFAULT_TIME_INTERVAL
         
         self.status_updated.emit(f"开始数据轮询（循环播放），时间间隔: {default_interval}秒")
         
@@ -410,10 +488,12 @@ class OPCUAServerThread(QThread):
                                     value = parsed[0] if parsed else 0.0
                                 else:
                                     value = float(parsed) if isinstance(parsed, (int, float)) else 0.0
-                            except:
+                            except (ValueError, SyntaxError) as e:
+                                logger.debug(f"Failed to parse value as literal: {e}")
                                 try:
                                     value = float(value)
-                                except:
+                                except (ValueError, TypeError) as e2:
+                                    logger.debug(f"Failed to convert to float: {e2}")
                                     value = 0.0
                         
                         # 确保是数值类型
@@ -455,7 +535,7 @@ class UnifiedToolWindow(QMainWindow):
     
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("PID模拟与OPCUA Server工具")
+        self.setWindowTitle("PID模拟与OPCUA Server工具 v3")
         self.setGeometry(100, 100, 1600, 900)
         
         # 数据存储
@@ -502,6 +582,14 @@ class UnifiedToolWindow(QMainWindow):
         # 下半部分：OPCUA Server区域
         server_panel = self._create_server_panel()
         main_layout.addWidget(server_panel)
+        
+        # 右下角版本信息标签
+        version_layout = QHBoxLayout()
+        version_layout.addStretch()  # 左侧弹性空间，将label推到右侧
+        self.version_label = QLabel("pid_simu_ua_server_v3 designed by @yuzechao")
+        self.version_label.setStyleSheet("color: #888888; font-size: 10px; padding: 5px;")
+        version_layout.addWidget(self.version_label)
+        main_layout.addLayout(version_layout)
     
     def _create_simulation_left_panel(self) -> QWidget:
         """创建模拟左侧参数配置面板"""
@@ -600,11 +688,84 @@ class UnifiedToolWindow(QMainWindow):
         duration_group.setLayout(duration_layout)
         layout.addWidget(duration_group)
         
+        # 实例名配置（移到模板按钮上方）
+        instance_layout = QHBoxLayout()
+        instance_layout.addWidget(QLabel("实例名:"))
+        self.instance_name_input = QLineEdit()
+        self.instance_name_input.setText("PID_TEST_1")
+        self.instance_name_input.setMaximumWidth(150)
+        self.instance_name_input.setToolTip("用于OPCUA节点和导出数据的位号前缀")
+        instance_layout.addWidget(self.instance_name_input)
+        instance_layout.addStretch()
+        layout.addLayout(instance_layout)
+        
+        # 模板管理按钮（并排）
+        template_layout = QHBoxLayout()
+        self.export_template_button = QPushButton("导出模板")
+        self.export_template_button.setStyleSheet("background-color: #FF9800; color: white; font-weight: bold; padding: 8px;")
+        self.export_template_button.clicked.connect(self.export_template)
+        template_layout.addWidget(self.export_template_button)
+        
+        self.import_template_button = QPushButton("导入模板")
+        self.import_template_button.setStyleSheet("background-color: #9C27B0; color: white; font-weight: bold; padding: 8px;")
+        self.import_template_button.clicked.connect(self.import_template)
+        template_layout.addWidget(self.import_template_button)
+        layout.addLayout(template_layout)
+        
         # 控制按钮
         self.start_sim_button = QPushButton("开始模拟")
         self.start_sim_button.setStyleSheet("background-color: #4CAF50; color: white; font-weight: bold; padding: 8px;")
         self.start_sim_button.clicked.connect(self.start_simulation)
         layout.addWidget(self.start_sim_button)
+        
+        # 导出数据按钮和时间拉伸输入框（并排）
+        export_layout = QHBoxLayout()
+        
+        # 时间拉伸输入框
+        export_layout.addWidget(QLabel("时间拉伸:"))
+        self.time_stretch_input = QLineEdit()
+        self.time_stretch_input.setText("1")
+        self.time_stretch_input.setMaximumWidth(80)
+        self.time_stretch_input.setToolTip("时间拉伸倍数，例如：5表示将时间间隔扩展5倍")
+        export_layout.addWidget(self.time_stretch_input)
+        
+        export_layout.addStretch()
+        
+        # PID整定模板导出按钮
+        self.export_pid_tuning_button = QPushButton("导出数据[PID整定模板]")
+        self.export_pid_tuning_button.setStyleSheet("background-color: #9C27B0; color: white; font-weight: bold; padding: 8px;")
+        self.export_pid_tuning_button.clicked.connect(self.export_pid_tuning_template)
+        self.export_pid_tuning_button.setEnabled(False)
+        export_layout.addWidget(self.export_pid_tuning_button)
+        
+        # 导出数据按钮（预测模板）
+        self.export_data_button = QPushButton("导出数据[预测模板]")
+        self.export_data_button.setStyleSheet("background-color: #2196F3; color: white; font-weight: bold; padding: 8px;")
+        self.export_data_button.clicked.connect(self.export_data_to_csv)
+        self.export_data_button.setEnabled(False)
+        export_layout.addWidget(self.export_data_button)
+        
+        layout.addLayout(export_layout)
+        
+        # TPT导入位号模板导出区域
+        tpt_export_layout = QHBoxLayout()
+        tpt_export_layout.addWidget(QLabel("数据源名称:"))
+        self.tpt_datasource_input = QLineEdit()
+        self.tpt_datasource_input.setText("yzc_test")
+        self.tpt_datasource_input.setMaximumWidth(150)
+        self.tpt_datasource_input.setToolTip("TPT导入位号模板的数据源名称")
+        tpt_export_layout.addWidget(self.tpt_datasource_input)
+        
+        tpt_export_layout.addStretch()
+        
+        # TPT导入位号模板导出按钮
+        self.export_tpt_template_button = QPushButton("TPT导入位号模板")
+        self.export_tpt_template_button.setStyleSheet("background-color: #FF5722; color: white; font-weight: bold; padding: 8px;")
+        self.export_tpt_template_button.clicked.connect(self.export_tpt_template)
+        self.export_tpt_template_button.setEnabled(False)
+        tpt_export_layout.addWidget(self.export_tpt_template_button)
+        
+        layout.addLayout(tpt_export_layout)
         
         # 进度条
         self.progress_bar = QProgressBar()
@@ -620,24 +781,49 @@ class UnifiedToolWindow(QMainWindow):
         """创建模拟右侧图表面板"""
         panel = QWidget()
         layout = QVBoxLayout()
+        layout.setSpacing(5)  # 减小间距
         panel.setLayout(layout)
         
-        # 图表标题
+        # 图表标题（缩小）
         title_label = QLabel("PID控制曲线")
         title_font = QFont()
-        title_font.setPointSize(14)
+        title_font.setPointSize(10)  # 从14减小到10
         title_font.setBold(True)
         title_label.setFont(title_font)
         title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        title_label.setMaximumHeight(25)  # 限制标题高度
         layout.addWidget(title_label)
         
-        # matplotlib图表
+        # matplotlib图表（允许纵向拉伸）
         self.figure = Figure(figsize=(10, 6))
         self.canvas = FigureCanvas(self.figure)
-        layout.addWidget(self.canvas)
+        # 移除固定高度限制，允许拉伸
+        self.canvas.setMinimumHeight(300)  # 设置最小高度
+        layout.addWidget(self.canvas, stretch=1)  # 设置拉伸因子，让图表占据更多空间
         
         # 初始化图表
         self._init_chart()
+        
+        # 位号显示区域（两行四列）- 放在图表下方
+        tag_display_group = QGroupBox("位号列表")
+        tag_display_layout = QGridLayout()
+        
+        # 定义所有位号（8个位号，两行四列）- 使用常量定义
+        self.tag_labels = {}
+        tag_names = Constants.TAG_DEFINITIONS
+        
+        for idx, (tag_key, tag_desc) in enumerate(tag_names):
+            row = idx // 4
+            col = idx % 4
+            # 创建标签显示完整位号名
+            tag_label = QLabel()
+            tag_label.setWordWrap(True)
+            tag_label.setStyleSheet("padding: 4px; border: 1px solid #ddd; background-color: #f5f5f5;")
+            self.tag_labels[tag_key] = tag_label
+            tag_display_layout.addWidget(tag_label, row, col)
+        
+        tag_display_group.setLayout(tag_display_layout)
+        layout.addWidget(tag_display_group)
         
         return panel
     
@@ -650,12 +836,6 @@ class UnifiedToolWindow(QMainWindow):
         # 服务器配置区域
         server_group = QGroupBox("OPCUA服务器配置")
         server_layout = QHBoxLayout()
-        
-        server_layout.addWidget(QLabel("实例名:"))
-        self.instance_name_input = QLineEdit()
-        self.instance_name_input.setText("PID_TEST_1")
-        self.instance_name_input.setMaximumWidth(150)
-        server_layout.addWidget(self.instance_name_input)
         
         server_layout.addWidget(QLabel("端口:"))
         self.port_input = QLineEdit()
@@ -752,37 +932,149 @@ class UnifiedToolWindow(QMainWindow):
         
         # 实例名默认值
         self.instance_name_input.setText("PID_TEST_1")
+        
+        # 连接实例名输入框的信号，当实例名改变时更新位号显示
+        if hasattr(self, 'tag_labels'):
+            self.instance_name_input.textChanged.connect(self._update_tag_display)
+            # 初始化位号显示
+            self._update_tag_display()
+    
+    def _update_tag_display(self):
+        """更新位号显示"""
+        instance_name = self.instance_name_input.text().strip() or "PID_TEST_1"
+        # 使用常量定义的位号描述
+        tag_descriptions = Constants.get_tag_descriptions()
+        
+        for tag_key, tag_label in self.tag_labels.items():
+            # 使用新格式：{实例名}_{param_prefix}.{param_suffix.UPPER}
+            full_tag_name = self._format_tag_name(instance_name, tag_key)
+            tag_desc = tag_descriptions.get(tag_key, tag_key)
+            tag_label.setText(f"{full_tag_name}\n({tag_desc})")
+    
+    def _format_float(self, value: float, precision: int = 6) -> str:
+        """格式化浮点数"""
+        return f"{value:.{precision}f}"
+    
+    def _format_tag_name(self, instance_name: str, param_name: str) -> str:
+        """
+        格式化位号名：{实例名}_{param_prefix}.{param_suffix.UPPER}
+        
+        Args:
+            instance_name: 实例名，如 "PID_TEST_1"
+            param_name: 参数名，如 "pid.mv", "tank.level", "valve.current_opening"
+        
+        Returns:
+            格式化后的位号名，如 "PID_TEST_1_pid.MV", "PID_TEST_1_tank.LEVEL"
+        
+        Examples:
+            - "pid.mv" -> "PID_TEST_1_pid.MV"
+            - "tank.level" -> "PID_TEST_1_tank.LEVEL"
+            - "valve.current_opening" -> "PID_TEST_1_valve.CURRENT_OPENING"
+        """
+        if '.' in param_name:
+            param_prefix, param_suffix = param_name.split('.', 1)
+            # 将param_suffix转换为大写
+            param_suffix_upper = param_suffix.upper()
+            return f"{instance_name}_{param_prefix}.{param_suffix_upper}"
+        else:
+            # 如果没有点，直接使用参数名（转换为大写）
+            return f"{instance_name}_{param_name.upper()}"
+    
+    def _get_float_value(self, line_edit: QLineEdit, default: str) -> float:
+        """获取浮点数值，带默认值和验证"""
+        try:
+            text = line_edit.text().strip()
+            value = float(text) if text else float(default)
+            return value
+        except ValueError:
+            logger.warning(f"Invalid float value in {line_edit.objectName()}, using default: {default}")
+            return float(default)
     
     def _get_tank_params(self) -> Dict[str, Any]:
         """获取水箱参数"""
+        height = self._get_float_value(self.tank_height, "2.0")
+        if height <= 0:
+            raise ValueError("水箱高度必须大于0")
+        
+        radius = self._get_float_value(self.tank_radius, "0.5")
+        if radius <= 0:
+            raise ValueError("水箱半径必须大于0")
+        
+        inlet_area = self._get_float_value(self.tank_inlet_area, "0.06")
+        if inlet_area <= 0:
+            raise ValueError("入水口面积必须大于0")
+        
+        inlet_velocity = self._get_float_value(self.tank_inlet_velocity, "3.0")
+        if inlet_velocity < 0:
+            raise ValueError("入水速度不能为负数")
+        
+        outlet_area = self._get_float_value(self.tank_outlet_area, "0.001")
+        if outlet_area <= 0:
+            raise ValueError("出水口面积必须大于0")
+        
+        initial_level = self._get_float_value(self.tank_initial_level, "0.0")
+        if initial_level < 0:
+            raise ValueError("初始水位不能为负数")
+        
         return {
-            'height': float(self.tank_height.text() or "2.0"),
-            'radius': float(self.tank_radius.text() or "0.5"),
-            'inlet_area': float(self.tank_inlet_area.text() or "0.06"),
-            'inlet_velocity': float(self.tank_inlet_velocity.text() or "3.0"),
-            'outlet_area': float(self.tank_outlet_area.text() or "0.001"),
-            'initial_level': float(self.tank_initial_level.text() or "0.0")
+            'height': height,
+            'radius': radius,
+            'inlet_area': inlet_area,
+            'inlet_velocity': inlet_velocity,
+            'outlet_area': outlet_area,
+            'initial_level': initial_level
         }
     
     def _get_valve_params(self) -> Dict[str, Any]:
         """获取阀门参数"""
+        min_opening = self._get_float_value(self.valve_min_opening, "0.0")
+        max_opening = self._get_float_value(self.valve_max_opening, "100.0")
+        
+        if min_opening < 0 or min_opening > 100:
+            raise ValueError("最小开度必须在0-100范围内")
+        if max_opening < 0 or max_opening > 100:
+            raise ValueError("最大开度必须在0-100范围内")
+        if min_opening >= max_opening:
+            raise ValueError("最大开度必须大于最小开度")
+        
+        full_travel_time = self._get_float_value(self.valve_full_travel_time, "5.0")
+        if full_travel_time <= 0:
+            raise ValueError("满行程时间必须大于0")
+        
         return {
-            'min_opening': float(self.valve_min_opening.text() or "0.0"),
-            'max_opening': float(self.valve_max_opening.text() or "100.0"),
-            'full_travel_time': float(self.valve_full_travel_time.text() or "5.0")
+            'min_opening': min_opening,
+            'max_opening': max_opening,
+            'full_travel_time': full_travel_time
         }
     
     def _get_pid_params(self) -> Dict[str, Any]:
         """获取PID参数"""
+        kp = self._get_float_value(self.pid_kp, "12.0")
+        if kp < 0:
+            raise ValueError("比例系数不能为负数")
+        
+        ti = self._get_float_value(self.pid_ti, "30.0")
+        if ti < 0:
+            raise ValueError("积分时间不能为负数")
+        
+        td = self._get_float_value(self.pid_td, "0.15")
+        if td < 0:
+            raise ValueError("微分时间不能为负数")
+        
+        h = self._get_float_value(self.pid_h, "100.0")
+        l = self._get_float_value(self.pid_l, "0.0")
+        if h <= l:
+            raise ValueError("输出上限必须大于输出下限")
+        
         return {
-            'kp': float(self.pid_kp.text() or "12.0"),
-            'ti': float(self.pid_ti.text() or "30.0"),
-            'td': float(self.pid_td.text() or "0.15"),
+            'kp': kp,
+            'ti': ti,
+            'td': td,
             'sv': float(self.pid_sv.text().split(',')[0] if self.pid_sv.text() else "0.0"),  # 使用第一个值作为初始值
-            'pv': float(self.pid_pv.text() or "0.0"),
-            'mv': float(self.pid_mv.text() or "0.0"),
-            'h': float(self.pid_h.text() or "100.0"),
-            'l': float(self.pid_l.text() or "0.0")
+            'pv': self._get_float_value(self.pid_pv, "0.0"),
+            'mv': self._get_float_value(self.pid_mv, "0.0"),
+            'h': h,
+            'l': l
         }
     
     def _get_sv_values(self) -> List[float]:
@@ -840,8 +1132,14 @@ class UnifiedToolWindow(QMainWindow):
             self.simulation_thread.finished.connect(self._on_simulation_finished)
             self.simulation_thread.start()
             
+        except ValueError as e:
+            QMessageBox.warning(self, "输入错误", f"参数验证失败：\n{str(e)}")
+            self.start_sim_button.setEnabled(True)
+            self.start_sim_button.setText("开始模拟")
+            self.progress_bar.setVisible(False)
         except Exception as e:
             QMessageBox.critical(self, "错误", f"启动模拟失败: {str(e)}")
+            logger.exception("Error starting simulation")
             self.start_sim_button.setEnabled(True)
             self.start_sim_button.setText("开始模拟")
             self.progress_bar.setVisible(False)
@@ -870,10 +1168,13 @@ class UnifiedToolWindow(QMainWindow):
         self.start_sim_button.setText("开始模拟")
         self.progress_bar.setVisible(False)
         
-        # 启用启动服务器按钮
+        # 启用启动服务器按钮和导出数据按钮
         self.start_server_button.setEnabled(True)
+        self.export_data_button.setEnabled(True)
+        self.export_pid_tuning_button.setEnabled(True)
+        self.export_tpt_template_button.setEnabled(True)
         
-        QMessageBox.information(self, "完成", f"模拟完成！共生成 {len(data_records)} 条记录。")
+        QMessageBox.information(self, "完成", "模拟完成！")
     
     def _update_chart(self):
         """更新图表"""
@@ -921,17 +1222,37 @@ class UnifiedToolWindow(QMainWindow):
             QMessageBox.warning(self, "警告", "请先运行模拟！")
             return
         
+        # 验证端口号
         try:
             port = int(self.port_input.text() or "18951")
+            if not (Constants.MIN_PORT <= port <= Constants.MAX_PORT):
+                QMessageBox.warning(self, "警告", f"端口号必须在{Constants.MIN_PORT}-{Constants.MAX_PORT}范围内！")
+                return
         except ValueError:
             QMessageBox.warning(self, "警告", "端口号必须是数字！")
             return
         
-        # 获取实例名
-        instance_name = self.instance_name_input.text().strip()
-        if not instance_name:
-            QMessageBox.warning(self, "警告", "请输入实例名！")
-            return
+        # 检查端口是否被占用
+        try:
+            sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            sock.settimeout(1)
+            result = sock.connect_ex(('127.0.0.1', port))
+            sock.close()
+            if result == 0:
+                reply = QMessageBox.question(
+                    self, 
+                    "端口占用", 
+                    f"端口 {port} 已被占用，是否仍要继续？",
+                    QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No
+                )
+                if reply == QMessageBox.StandardButton.No:
+                    return
+        except Exception as e:
+            logger.warning(f"Failed to check port availability: {e}")
+            # 端口检查失败不影响启动，继续执行
+        
+        # 获取实例名（如果为空则使用默认值）
+        instance_name = self.instance_name_input.text().strip() or "PID_TEST_1"
         
         # 禁用开始按钮，启用停止按钮
         self.start_server_button.setEnabled(False)
@@ -978,6 +1299,608 @@ class UnifiedToolWindow(QMainWindow):
         """错误回调"""
         QMessageBox.critical(self, "错误", error_message)
         self._on_server_finished()
+    
+    def export_template(self):
+        """
+        导出模板：保存所有参数配置到JSON文件
+        """
+        try:
+            # 收集所有参数配置
+            template = {
+                'tank': {
+                    'height': self.tank_height.text(),
+                    'radius': self.tank_radius.text(),
+                    'inlet_area': self.tank_inlet_area.text(),
+                    'inlet_velocity': self.tank_inlet_velocity.text(),
+                    'outlet_area': self.tank_outlet_area.text(),
+                    'initial_level': self.tank_initial_level.text()
+                },
+                'valve': {
+                    'min_opening': self.valve_min_opening.text(),
+                    'max_opening': self.valve_max_opening.text(),
+                    'full_travel_time': self.valve_full_travel_time.text()
+                },
+                'pid': {
+                    'kp': self.pid_kp.text(),
+                    'ti': self.pid_ti.text(),
+                    'td': self.pid_td.text(),
+                    'sv': self.pid_sv.text(),
+                    'pv': self.pid_pv.text(),
+                    'mv': self.pid_mv.text(),
+                    'h': self.pid_h.text(),
+                    'l': self.pid_l.text()
+                },
+                'simulation': {
+                    'duration': self.duration_input.text()
+                }
+            }
+            
+            # 选择保存文件
+            timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+            default_filename = f"pid_template_{timestamp}.json"
+            
+            filename, _ = QFileDialog.getSaveFileName(
+                self,
+                "导出模板",
+                default_filename,
+                "JSON Files (*.json);;All Files (*)"
+            )
+            
+            if not filename:
+                return
+            
+            # 验证文件路径安全性
+            if not os.path.isabs(filename):
+                # 处理相对路径，转换为绝对路径
+                filename = os.path.abspath(filename)
+            
+            # 检查目录是否存在，是否有写权限
+            dir_path = os.path.dirname(filename)
+            if dir_path and not os.path.exists(dir_path):
+                try:
+                    os.makedirs(dir_path, exist_ok=True)
+                except OSError as e:
+                    QMessageBox.critical(self, "错误", f"无法创建目录: {dir_path}\n{str(e)}")
+                    return
+            
+            # 保存到JSON文件
+            with open(filename, 'w', encoding='utf-8') as f:
+                json.dump(template, f, ensure_ascii=False, indent=4)
+            
+            QMessageBox.information(self, "成功", f"模板已保存到：\n{filename}")
+            
+        except PermissionError as e:
+            QMessageBox.critical(self, "错误", f"没有权限访问文件：\n{str(e)}")
+        except OSError as e:
+            QMessageBox.critical(self, "错误", f"文件操作失败：\n{str(e)}")
+        except Exception as e:
+            QMessageBox.critical(self, "错误", f"导出模板失败：\n{str(e)}")
+            logger.exception("Error exporting template")
+    
+    def import_template(self):
+        """
+        导入模板：从JSON文件加载所有参数配置
+        """
+        try:
+            # 选择文件
+            filename, _ = QFileDialog.getOpenFileName(
+                self,
+                "导入模板",
+                "",
+                "JSON Files (*.json);;All Files (*)"
+            )
+            
+            if not filename:
+                return
+            
+            # 验证文件路径安全性
+            if not os.path.exists(filename):
+                QMessageBox.critical(self, "错误", f"文件不存在：\n{filename}")
+                return
+            
+            # 读取JSON文件
+            with open(filename, 'r', encoding='utf-8') as f:
+                template = json.load(f)
+            
+            # 加载水箱参数
+            if 'tank' in template:
+                tank = template['tank']
+                self.tank_height.setText(str(tank.get('height', '')))
+                self.tank_radius.setText(str(tank.get('radius', '')))
+                self.tank_inlet_area.setText(str(tank.get('inlet_area', '')))
+                self.tank_inlet_velocity.setText(str(tank.get('inlet_velocity', '')))
+                self.tank_outlet_area.setText(str(tank.get('outlet_area', '')))
+                self.tank_initial_level.setText(str(tank.get('initial_level', '')))
+            
+            # 加载阀门参数
+            if 'valve' in template:
+                valve = template['valve']
+                self.valve_min_opening.setText(str(valve.get('min_opening', '')))
+                self.valve_max_opening.setText(str(valve.get('max_opening', '')))
+                self.valve_full_travel_time.setText(str(valve.get('full_travel_time', '')))
+            
+            # 加载PID参数
+            if 'pid' in template:
+                pid = template['pid']
+                self.pid_kp.setText(str(pid.get('kp', '')))
+                self.pid_ti.setText(str(pid.get('ti', '')))
+                self.pid_td.setText(str(pid.get('td', '')))
+                self.pid_sv.setText(str(pid.get('sv', '')))
+                self.pid_pv.setText(str(pid.get('pv', '')))
+                self.pid_mv.setText(str(pid.get('mv', '')))
+                self.pid_h.setText(str(pid.get('h', '')))
+                self.pid_l.setText(str(pid.get('l', '')))
+            
+            # 加载模拟设置
+            if 'simulation' in template:
+                sim = template['simulation']
+                self.duration_input.setText(str(sim.get('duration', '')))
+            
+            QMessageBox.information(self, "成功", f"模板已从以下文件加载：\n{filename}")
+            
+        except FileNotFoundError as e:
+            QMessageBox.critical(self, "错误", f"文件未找到：\n{str(e)}")
+        except PermissionError as e:
+            QMessageBox.critical(self, "错误", f"没有权限访问文件：\n{str(e)}")
+        except json.JSONDecodeError as e:
+            QMessageBox.critical(self, "错误", f"JSON文件格式错误：\n{str(e)}")
+        except Exception as e:
+            QMessageBox.critical(self, "错误", f"导入模板失败：\n{str(e)}")
+            logger.exception("Error importing template")
+    
+    def export_data_to_csv(self):
+        """
+        导出数据到CSV文件
+        
+        格式要求：
+        - 第一行：timeStamp PID.mv PID.sv PID.pv PID.Kp PID.Td PID.Ti
+        - 第二行：时间戳 PID控制输出 PID预设值 PID输入值 比例系数 积分时间 微分时间
+        - 第三行开始：时间戳（格式：2024/6/3 19:08:45） 具体数据值
+        - 每秒采样一个数据
+        """
+        if not self.data_records:
+            QMessageBox.warning(self, "警告", "没有数据可导出！请先运行模拟。")
+            return
+        
+        # 选择保存文件
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        default_filename = f"pid_export_{timestamp}.csv"
+        
+        filename, _ = QFileDialog.getSaveFileName(
+            self,
+            "导出数据到CSV",
+            default_filename,
+            "CSV Files (*.csv);;All Files (*)"
+        )
+        
+        if not filename:
+            return
+        
+        # 验证文件路径安全性
+        if not os.path.isabs(filename):
+            # 处理相对路径，转换为绝对路径
+            filename = os.path.abspath(filename)
+        
+        # 检查目录是否存在，是否有写权限
+        dir_path = os.path.dirname(filename)
+        if dir_path and not os.path.exists(dir_path):
+            try:
+                os.makedirs(dir_path, exist_ok=True)
+            except OSError as e:
+                QMessageBox.critical(self, "错误", f"无法创建目录: {dir_path}\n{str(e)}")
+                return
+        
+        try:
+            # 获取时间拉伸倍数
+            try:
+                time_stretch = float(self.time_stretch_input.text() or "1")
+                if time_stretch <= 0:
+                    QMessageBox.warning(self, "警告", "时间拉伸倍数必须大于0！")
+                    return
+            except ValueError:
+                QMessageBox.warning(self, "警告", "时间拉伸倍数格式错误，请输入数字！")
+                return
+            
+            # 获取PID参数（从第一条记录中获取，因为Kp, Td, Ti在模拟过程中是固定的）
+            if not self.data_records:
+                QMessageBox.warning(self, "警告", "没有数据可导出！")
+                return
+            
+            # 每秒采样一个数据
+            # 假设数据记录的时间间隔是cycle_time（默认0.5秒），所以每2个记录采样1个
+            # 但用户要求每秒1个，所以需要根据sim_time来采样
+            sampled_records = []
+            last_sampled_time = -1.0
+            
+            for record in self.data_records:
+                sim_time = record.get('sim_time', 0)
+                # 如果当前时间与上次采样时间相差>=1秒，则采样
+                if sim_time - last_sampled_time >= 1.0:
+                    sampled_records.append(record)
+                    last_sampled_time = sim_time
+            
+            # 如果没有采样到数据，至少采样第一个和最后一个
+            if not sampled_records:
+                sampled_records = [self.data_records[0]]
+                if len(self.data_records) > 1:
+                    sampled_records.append(self.data_records[-1])
+            
+            # 获取实例名（用于位号前缀）
+            instance_name = self.instance_name_input.text().strip() or "PID_TEST_1"
+            
+            # 写入CSV文件
+            with open(filename, 'w', newline='', encoding='utf-8') as f:
+                writer = csv.writer(f)
+                
+                # 第一行：timeStamp {实例名}_pid.MV {实例名}_pid.SV ...（使用新格式）
+                writer.writerow([
+                    'timeStamp',
+                    self._format_tag_name(instance_name, 'pid.mv'),
+                    self._format_tag_name(instance_name, 'pid.sv'),
+                    self._format_tag_name(instance_name, 'pid.pv'),
+                    self._format_tag_name(instance_name, 'pid.kp'),
+                    self._format_tag_name(instance_name, 'pid.td'),
+                    self._format_tag_name(instance_name, 'pid.ti'),
+                    self._format_tag_name(instance_name, 'tank.level'),
+                    self._format_tag_name(instance_name, 'valve.current_opening')
+                ])
+                
+                # 第二行：时间戳 PID控制输出 PID预设值 PID输入值 比例系数 积分时间 微分时间 水箱液位 阀门开度
+                writer.writerow([
+                    '时间戳',
+                    'PID控制输出',
+                    'PID预设值',
+                    'PID输入值',
+                    '比例系数',
+                    '积分时间',
+                    '微分时间',
+                    '水箱液位',
+                    '阀门开度'
+                ])
+                
+                # 第三行开始：时间戳（格式：2024/6/3 19:08:45） 具体数据值
+                # 使用固定的基准时间，然后加上sim_time * time_stretch
+                base_time = Constants.DEFAULT_BASE_TIME
+                
+                for record in sampled_records:
+                    sim_time = record.get('sim_time', 0)
+                    # 计算时间戳：基准时间 + sim_time * time_stretch秒数（应用时间拉伸）
+                    stretched_time = sim_time * time_stretch
+                    record_time = base_time + timedelta(seconds=stretched_time)
+                    
+                    # 格式：2024/6/3 19:08:45（注意：月份和日期不补零）
+                    time_str = f"{record_time.year}-{record_time.month}-{record_time.day} {record_time.hour}:{record_time.minute:02d}:{record_time.second:02d}"
+                    
+                    # 获取数据值（包含所有8个位号）
+                    pid_mv = record.get('pid.mv', 0)
+                    pid_sv = record.get('pid.sv', 0)
+                    pid_pv = record.get('pid.pv', 0)
+                    pid_kp = record.get('pid.kp', 0)
+                    pid_td = record.get('pid.td', 0)
+                    pid_ti = record.get('pid.ti', 0)
+                    tank_level = record.get('tank.level', 0)
+                    valve_opening = record.get('valve.current_opening', 0)
+                    
+                    writer.writerow([
+                        time_str,
+                        self._format_float(pid_mv),
+                        self._format_float(pid_sv),
+                        self._format_float(pid_pv),
+                        self._format_float(pid_kp),
+                        self._format_float(pid_td),
+                        self._format_float(pid_ti),
+                        self._format_float(tank_level),
+                        self._format_float(valve_opening)
+                    ])
+            
+            # 计算原始时间跨度和拉伸后的时间跨度
+            if sampled_records:
+                original_duration = sampled_records[-1].get('sim_time', 0) - sampled_records[0].get('sim_time', 0)
+                stretched_duration = original_duration * time_stretch
+            else:
+                original_duration = 0
+                stretched_duration = 0
+            
+            stretch_info = f"，时间拉伸倍数：{time_stretch}" if time_stretch != 1 else ""
+            QMessageBox.information(
+                self, 
+                "导出成功", 
+                f"数据已成功导出到：\n{filename}\n\n"
+                f"共导出 {len(sampled_records)} 条记录（每秒1条）{stretch_info}。\n"
+                f"原始时间跨度：{original_duration:.1f}秒，拉伸后时间跨度：{stretched_duration:.1f}秒。"
+            )
+            
+        except FileNotFoundError as e:
+            QMessageBox.critical(self, "导出失败", f"文件未找到：\n{str(e)}")
+        except PermissionError as e:
+            QMessageBox.critical(self, "导出失败", f"没有权限访问文件：\n{str(e)}")
+        except OSError as e:
+            QMessageBox.critical(self, "导出失败", f"文件操作失败：\n{str(e)}")
+        except Exception as e:
+            QMessageBox.critical(self, "导出失败", f"导出数据时发生错误：\n{str(e)}")
+            logger.exception("Error exporting data to CSV")
+    
+    def export_pid_tuning_template(self):
+        """
+        导出PID整定模板（CSV格式）
+        
+        格式要求：
+        - 第一行：时间 PV MV SV三个格式化后的位号名
+        - 第二行开始：数据行，时间格式为 yyyy-MM-dd HH:mm:ss
+        - 只导出PV、MV、SV三个位号
+        """
+        if not self.data_records:
+            QMessageBox.warning(self, "警告", "没有数据可导出！请先运行模拟。")
+            return
+        
+        # 选择保存文件
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        default_filename = f"pid_tuning_export_{timestamp}.csv"
+        
+        filename, _ = QFileDialog.getSaveFileName(
+            self,
+            "导出PID整定模板",
+            default_filename,
+            "CSV Files (*.csv);;All Files (*)"
+        )
+        
+        if not filename:
+            return
+        
+        # 验证文件路径安全性
+        if not os.path.isabs(filename):
+            filename = os.path.abspath(filename)
+        
+        # 检查目录是否存在
+        dir_path = os.path.dirname(filename)
+        if dir_path and not os.path.exists(dir_path):
+            try:
+                os.makedirs(dir_path, exist_ok=True)
+            except OSError as e:
+                QMessageBox.critical(self, "错误", f"无法创建目录: {dir_path}\n{str(e)}")
+                return
+        
+        try:
+            # 获取时间拉伸倍数
+            try:
+                time_stretch = float(self.time_stretch_input.text() or "1")
+                if time_stretch <= 0:
+                    QMessageBox.warning(self, "警告", "时间拉伸倍数必须大于0！")
+                    return
+            except ValueError:
+                QMessageBox.warning(self, "警告", "时间拉伸倍数格式错误，请输入数字！")
+                return
+            
+            # 获取实例名
+            instance_name = self.instance_name_input.text().strip() or "PID_TEST_1"
+            
+            # 每秒采样一个数据（与预测模板共用采样逻辑）
+            sampled_records = []
+            last_sampled_time = -1.0
+            
+            for record in self.data_records:
+                sim_time = record.get('sim_time', 0)
+                # 如果当前时间与上次采样时间相差>=1秒，则采样
+                if sim_time - last_sampled_time >= 1.0:
+                    sampled_records.append(record)
+                    last_sampled_time = sim_time
+            
+            # 如果没有采样到数据，至少采样第一个和最后一个
+            if not sampled_records:
+                sampled_records = [self.data_records[0]]
+                if len(self.data_records) > 1:
+                    sampled_records.append(self.data_records[-1])
+            
+            # 写入CSV文件
+            with open(filename, 'w', newline='', encoding='utf-8') as f:
+                writer = csv.writer(f)
+                
+                # 第一行：时间 PV MV SV（使用格式化后的位号名）
+                writer.writerow([
+                    '时间',
+                    self._format_tag_name(instance_name, 'pid.pv'),
+                    self._format_tag_name(instance_name, 'pid.mv'),
+                    self._format_tag_name(instance_name, 'pid.sv')
+                ])
+                
+                # 第二行开始：数据行，时间格式为 yyyy-MM-dd HH:mm:ss
+                base_time = Constants.DEFAULT_BASE_TIME
+                
+                for record in sampled_records:
+                    sim_time = record.get('sim_time', 0)
+                    # 计算时间戳：基准时间 + sim_time * time_stretch秒数（应用时间拉伸）
+                    stretched_time = sim_time * time_stretch
+                    record_time = base_time + timedelta(seconds=stretched_time)
+                    
+                    # 格式：yyyy-MM-dd HH:mm:ss
+                    time_str = record_time.strftime("%Y-%m-%d %H:%M:%S")
+                    
+                    # 获取数据值（只导出PV、MV、SV）
+                    pid_pv = record.get('pid.pv', 0)
+                    pid_mv = record.get('pid.mv', 0)
+                    pid_sv = record.get('pid.sv', 0)
+                    
+                    writer.writerow([
+                        time_str,
+                        self._format_float(pid_pv),
+                        self._format_float(pid_mv),
+                        self._format_float(pid_sv)
+                    ])
+            
+            # 计算原始时间跨度和拉伸后的时间跨度
+            if sampled_records:
+                original_duration = sampled_records[-1].get('sim_time', 0) - sampled_records[0].get('sim_time', 0)
+                stretched_duration = original_duration * time_stretch
+            else:
+                original_duration = 0
+                stretched_duration = 0
+            
+            stretch_info = f"，时间拉伸倍数：{time_stretch}" if time_stretch != 1 else ""
+            QMessageBox.information(
+                self,
+                "导出成功",
+                f"PID整定模板已成功导出到：\n{filename}\n\n"
+                f"共导出 {len(sampled_records)} 条记录（每秒1条）{stretch_info}。\n"
+                f"原始时间跨度：{original_duration:.1f}秒，拉伸后时间跨度：{stretched_duration:.1f}秒。"
+            )
+            
+        except FileNotFoundError as e:
+            QMessageBox.critical(self, "导出失败", f"文件未找到：\n{str(e)}")
+        except PermissionError as e:
+            QMessageBox.critical(self, "导出失败", f"没有权限访问文件：\n{str(e)}")
+        except OSError as e:
+            QMessageBox.critical(self, "导出失败", f"文件操作失败：\n{str(e)}")
+        except Exception as e:
+            QMessageBox.critical(self, "导出失败", f"导出数据时发生错误：\n{str(e)}")
+            logger.exception("Error exporting PID tuning template")
+    
+    def export_tpt_template(self):
+        """
+        导出TPT导入位号模板（Excel格式）
+        
+        格式要求：
+        - 1个sheet页，名字是sheet1
+        - 系统位号名和描述：完整位号名（实例名.参数名）
+        - 底层位号名：1_{完整位号名}（namespace=1）
+        - 数据源名称：从界面配置
+        - 数据类型：DOUBLE
+        - 采集频率：1
+        - 缓存数量：100
+        - 是否向量位号：TRUE
+        - 节点名：根节点
+        """
+        if not OPENPYXL_AVAILABLE:
+            QMessageBox.critical(
+                self, 
+                "错误", 
+                "未安装openpyxl库，无法导出Excel文件！\n\n"
+                "请运行以下命令安装：\n"
+                "pip install openpyxl"
+            )
+            return
+        
+        # 获取数据源名称
+        datasource_name = self.tpt_datasource_input.text().strip()
+        if not datasource_name:
+            QMessageBox.warning(self, "警告", "请输入数据源名称！")
+            return
+        
+        # 获取实例名
+        instance_name = self.instance_name_input.text().strip() or "PID_TEST_1"
+        
+        # 选择保存文件
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        default_filename = f"tpt_tag_template_{timestamp}.xlsx"
+        
+        filename, _ = QFileDialog.getSaveFileName(
+            self,
+            "导出TPT导入位号模板",
+            default_filename,
+            "Excel Files (*.xlsx);;All Files (*)"
+        )
+        
+        if not filename:
+            return
+        
+        # 验证文件路径安全性
+        if not os.path.isabs(filename):
+            filename = os.path.abspath(filename)
+        
+        # 检查目录是否存在
+        dir_path = os.path.dirname(filename)
+        if dir_path and not os.path.exists(dir_path):
+            try:
+                os.makedirs(dir_path, exist_ok=True)
+            except OSError as e:
+                QMessageBox.critical(self, "错误", f"无法创建目录: {dir_path}\n{str(e)}")
+                return
+        
+        try:
+            # 创建Workbook
+            wb = Workbook()
+            ws = wb.active
+            ws.title = "sheet1"
+            
+            # 定义所有位号（8个位号）- 使用常量定义
+            tag_names = Constants.TAG_DEFINITIONS
+            
+            # 写入表头
+            headers = [
+                '系统位号名', '底层位号名', '位号类型', '数据源名称（一次位号）', '单位',
+                '数据类型', '取值表达式（二次位号）', '位号值（虚位号）', '采集频率',
+                '缓存数量', '是否为向量位号', '位号值高限', '位号值高二限', '位号值高三限',
+                '位号值低限', '位号值低二限', '位号值低三限', '描述', '节点名'
+            ]
+            ws.append(headers)
+            
+            # 设置表头样式
+            header_font = Font(bold=True)
+            for cell in ws[1]:
+                cell.font = header_font
+                cell.alignment = Alignment(horizontal='center', vertical='center')
+            
+            # 写入数据行
+            namespace = 1  # OPCUA命名空间索引
+            for tag_key, tag_desc in tag_names:
+                # 使用新格式：{实例名}_{param_prefix}.{param_suffix.UPPER}
+                full_tag_name = self._format_tag_name(instance_name, tag_key)
+                bottom_tag_name = f"{namespace}_{full_tag_name}"  # 底层位号名：1_{完整位号名}
+                
+                row_data = [
+                    full_tag_name,  # 系统位号名
+                    bottom_tag_name,  # 底层位号名
+                    '一次位号',  # 位号类型
+                    datasource_name,  # 数据源名称（一次位号）
+                    '',  # 单位
+                    'DOUBLE',  # 数据类型
+                    '',  # 取值表达式（二次位号）
+                    '',  # 位号值（虚位号）
+                    1,  # 采集频率
+                    100,  # 缓存数量
+                    'TRUE',  # 是否为向量位号
+                    '',  # 位号值高限
+                    '',  # 位号值高二限
+                    '',  # 位号值高三限
+                    '',  # 位号值低限
+                    '',  # 位号值低二限
+                    '',  # 位号值低三限
+                    full_tag_name,  # 描述（与系统位号名一致）
+                    '根节点'  # 节点名
+                ]
+                ws.append(row_data)
+            
+            # 调整列宽（可选）
+            for column in ws.columns:
+                max_length = 0
+                column_letter = column[0].column_letter
+                for cell in column:
+                    try:
+                        if len(str(cell.value)) > max_length:
+                            max_length = len(str(cell.value))
+                    except:
+                        pass
+                adjusted_width = min(max_length + 2, 50)
+                ws.column_dimensions[column_letter].width = adjusted_width
+            
+            # 保存文件
+            wb.save(filename)
+            
+            QMessageBox.information(
+                self,
+                "导出成功",
+                f"TPT导入位号模板已成功导出到：\n{filename}\n\n"
+                f"共导出 {len(tag_names)} 个位号。\n"
+                f"数据源名称：{datasource_name}\n"
+                f"实例名：{instance_name}"
+            )
+            
+        except PermissionError as e:
+            QMessageBox.critical(self, "导出失败", f"没有权限访问文件：\n{str(e)}")
+        except OSError as e:
+            QMessageBox.critical(self, "导出失败", f"文件操作失败：\n{str(e)}")
+        except Exception as e:
+            QMessageBox.critical(self, "导出失败", f"导出TPT模板时发生错误：\n{str(e)}")
+            logger.exception("Error exporting TPT template")
 
 
 def main():

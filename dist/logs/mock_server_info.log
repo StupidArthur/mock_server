@@ -1,0 +1,48 @@
+2025-11-28 09:18:43,034 - INFO - CylindricalTank initialized: height=2.0, radius=0.5, initial_level=0.0
+2025-11-28 09:18:43,034 - INFO - Valve initialized: range=[0.0, 100.0], full_travel_time=5.0s
+2025-11-28 09:18:43,034 - INFO - PID 'PID' initialized: kp=12.0, ti=30.0s, td=0.15s, output_range=[0.0, 100.0], sample_time=0.5s
+2025-11-28 09:18:43,036 - INFO - Clock initialized with cycle_time=0.5s
+2025-11-28 09:18:43,036 - INFO - Clock started
+2025-11-28 09:18:43,319 - INFO - Clock stopped at time=900.00s
+2025-11-28 09:41:01,151 - INFO - CylindricalTank initialized: height=5.0, radius=0.5, initial_level=0.0
+2025-11-28 09:41:01,152 - INFO - Valve initialized: range=[0.0, 100.0], full_travel_time=5.0s
+2025-11-28 09:41:01,152 - INFO - PID 'PID' initialized: kp=12.0, ti=30.0s, td=0.15s, output_range=[0.0, 100.0], sample_time=0.5s
+2025-11-28 09:41:01,152 - INFO - Clock initialized with cycle_time=0.5s
+2025-11-28 09:41:01,152 - INFO - Clock started
+2025-11-28 09:41:01,406 - INFO - Clock stopped at time=900.00s
+2025-11-28 09:41:20,134 - INFO - CylindricalTank initialized: height=5.0, radius=0.5, initial_level=0.0
+2025-11-28 09:41:20,134 - INFO - Valve initialized: range=[0.0, 100.0], full_travel_time=5.0s
+2025-11-28 09:41:20,134 - INFO - PID 'PID' initialized: kp=12.0, ti=30.0s, td=0.15s, output_range=[0.0, 100.0], sample_time=0.5s
+2025-11-28 09:41:20,134 - INFO - Clock initialized with cycle_time=0.5s
+2025-11-28 09:41:20,134 - INFO - Clock started
+2025-11-28 09:41:20,384 - INFO - Clock stopped at time=900.00s
+2025-11-28 09:41:42,771 - INFO - CylindricalTank initialized: height=5.0, radius=0.5, initial_level=0.0
+2025-11-28 09:41:42,771 - INFO - Valve initialized: range=[0.0, 100.0], full_travel_time=5.0s
+2025-11-28 09:41:42,771 - INFO - PID 'PID' initialized: kp=12.0, ti=30.0s, td=0.15s, output_range=[0.0, 100.0], sample_time=0.5s
+2025-11-28 09:41:42,771 - INFO - Clock initialized with cycle_time=0.5s
+2025-11-28 09:41:42,771 - INFO - Clock started
+2025-11-28 09:41:43,023 - INFO - Clock stopped at time=900.00s
+2025-11-28 09:41:51,741 - INFO - CylindricalTank initialized: height=5.0, radius=0.5, initial_level=0.0
+2025-11-28 09:41:51,741 - INFO - Valve initialized: range=[0.0, 100.0], full_travel_time=5.0s
+2025-11-28 09:41:51,741 - INFO - PID 'PID' initialized: kp=12.0, ti=30.0s, td=0.15s, output_range=[0.0, 100.0], sample_time=0.5s
+2025-11-28 09:41:51,741 - INFO - Clock initialized with cycle_time=0.5s
+2025-11-28 09:41:51,741 - INFO - Clock started
+2025-11-28 09:41:51,997 - INFO - Clock stopped at time=900.00s
+2025-11-28 09:42:03,599 - INFO - CylindricalTank initialized: height=5.0, radius=0.5, initial_level=0.0
+2025-11-28 09:42:03,599 - INFO - Valve initialized: range=[0.0, 100.0], full_travel_time=5.0s
+2025-11-28 09:42:03,599 - INFO - PID 'PID' initialized: kp=12.0, ti=30.0s, td=0.15s, output_range=[0.0, 100.0], sample_time=0.5s
+2025-11-28 09:42:03,599 - INFO - Clock initialized with cycle_time=0.5s
+2025-11-28 09:42:03,599 - INFO - Clock started
+2025-11-28 09:42:06,402 - INFO - Clock stopped at time=10000.00s
+2025-11-28 09:42:16,089 - INFO - CylindricalTank initialized: height=5.0, radius=0.5, initial_level=0.0
+2025-11-28 09:42:16,089 - INFO - Valve initialized: range=[0.0, 100.0], full_travel_time=5.0s
+2025-11-28 09:42:16,089 - INFO - PID 'PID' initialized: kp=12.0, ti=30.0s, td=0.15s, output_range=[0.0, 100.0], sample_time=0.5s
+2025-11-28 09:42:16,089 - INFO - Clock initialized with cycle_time=0.5s
+2025-11-28 09:42:16,089 - INFO - Clock started
+2025-11-28 09:42:19,426 - INFO - Clock stopped at time=12000.00s
+2025-12-02 09:15:28,552 - INFO - CylindricalTank initialized: height=2.0, radius=0.5, initial_level=0.0
+2025-12-02 09:15:28,553 - INFO - Valve initialized: range=[0.0, 100.0], full_travel_time=5.0s
+2025-12-02 09:15:28,553 - INFO - PID 'PID' initialized: kp=12.0, ti=30.0s, td=0.15s, output_range=[0.0, 100.0], sample_time=0.5s
+2025-12-02 09:15:28,553 - INFO - Clock initialized with cycle_time=0.5s
+2025-12-02 09:15:28,553 - INFO - Clock started
+2025-12-02 09:15:28,800 - INFO - Clock stopped at time=900.00s
